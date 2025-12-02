@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Objection Practice App
+
+A Next.js application designed to help real estate disposition agents practice overcoming buyer objections. This interactive training tool allows agents to:
+
+- Practice with random objections
+- View suggested responses
+- Add and save custom responses
+- Share responses with team members
+
+## Features
+
+- **Random Objection Display**: Click a button to get a random objection to practice with
+- **Animated Loading**: Engaging animation while the app "searches" for the next objection
+- **Response Library**: View default responses for each objection
+- **Custom Responses**: Add your own responses and save them for future use
+- **Team Sharing**: All custom responses are saved and visible to all team members
+- **Modern UI**: Beautiful, responsive design with smooth animations
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ installed
+- npm or yarn package manager
+
+### Installation
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Run the development server:
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Building for Production
 
-## Learn More
+```bash
+npm run build
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+## How to Use
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Start a Practice Session**: Click the "Start Practice Session" button
+2. **View Objection**: A random objection will be displayed after a brief animation
+3. **See Responses**: Click "Show Responses" to view suggested responses
+4. **Add Your Response**: Click "Add Your Response" to contribute your own answer
+5. **Get Next Objection**: Click "Get Next Objection" to practice with another one
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data Storage
 
-## Deploy on Vercel
+Custom responses are stored in the browser's localStorage, making them:
+- Persistent across sessions
+- Shared with all team members using the same browser/device
+- Easy to export/import (via browser developer tools)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+objections-app/
+├── app/
+│   ├── page.tsx          # Main application page
+│   ├── layout.tsx        # Root layout
+│   └── globals.css       # Global styles
+├── components/
+│   ├── ObjectionCard.tsx # Component for displaying objections
+│   └── LoadingAnimation.tsx # Loading animation component
+├── data/
+│   └── objections.ts     # Initial objection data
+├── lib/
+│   └── storage.ts        # Data persistence utilities
+└── types/
+    └── index.ts          # TypeScript type definitions
+```
+
+## Customization
+
+### Adding More Objections
+
+Edit `data/objections.ts` to add more objections with their default responses.
+
+### Styling
+
+The app uses Tailwind CSS. Modify the classes in components to customize the appearance.
+
+## Future Enhancements
+
+Consider adding:
+- User authentication for multi-user support
+- Database integration (instead of localStorage)
+- Analytics to track practice sessions
+- Export/import functionality for responses
+- Categories or tags for objections
+- Search functionality
+
+## License
+
+Private - For internal use only
