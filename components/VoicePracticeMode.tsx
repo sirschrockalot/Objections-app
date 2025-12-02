@@ -7,9 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import ConversationTranscript from './ConversationTranscript';
 import AudioControls from './AudioControls';
 import AgentConfigurationManager from './AgentConfigurationManager';
+import VoiceScenarioSelector from './VoiceScenarioSelector';
+import { VoiceScenario } from '@/data/voiceScenarios';
 import { checkAudioSupport } from '@/lib/audioUtils';
 import { getAgentConfig, saveAgentConfig } from '@/lib/agentConfigStorage';
-import { AlertCircle, Settings } from 'lucide-react';
+import { saveVoiceScenarioSession, VoiceScenarioSession } from '@/lib/voiceScenarioStorage';
+import { AlertCircle, Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface VoicePracticeModeProps {
@@ -28,6 +31,8 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showConfigManager, setShowConfigManager] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState<VoiceScenario | null>(null);
+  const [showScenarioSelector, setShowScenarioSelector] = useState(false);
   const [audioSupport, setAudioSupport] = useState(checkAudioSupport());
 
   const {
@@ -51,9 +56,22 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     },
     onSessionEnd: (session) => {
       console.log('Session ended:', session);
-      onSessionEnd?.(session);
+      // Save scenario session if scenario is selected
+      if (selectedScenario) {
+        const scenarioSession: VoiceScenarioSession = {
+          ...session,
+          scenarioId: selectedScenario.id,
+          scenarioName: selectedScenario.name,
+          scenarioContext: selectedScenario.context,
+        };
+        saveVoiceScenarioSession(scenarioSession);
+        onSessionEnd?.(scenarioSession);
+      } else {
+        onSessionEnd?.(session);
+      }
     },
     autoConnect: false,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
   // Check if agent ID is configured
@@ -64,6 +82,28 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     setAgentConfig(newConfig);
     saveAgentConfig(newConfig);
   }, []);
+
+  // Handle scenario selection
+  const handleScenarioSelect = useCallback((scenario: VoiceScenario) => {
+    setSelectedScenario(scenario);
+    setShowScenarioSelector(false);
+  }, []);
+
+  // Enhanced session end handler for scenarios
+  const handleSessionEnd = useCallback((session: VoiceSession) => {
+    if (selectedScenario) {
+      const scenarioSession: VoiceScenarioSession = {
+        ...session,
+        scenarioId: selectedScenario.id,
+        scenarioName: selectedScenario.name,
+        scenarioContext: selectedScenario.context,
+      };
+      saveVoiceScenarioSession(scenarioSession);
+      onSessionEnd?.(scenarioSession);
+    } else {
+      onSessionEnd?.(session);
+    }
+  }, [selectedScenario, onSessionEnd]);
 
   // Handle start session
   const handleStart = useCallback(async () => {
@@ -232,6 +272,61 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Scenario Selector */}
+        {showScenarioSelector ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Select Practice Scenario</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowScenarioSelector(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <VoiceScenarioSelector
+              onSelectScenario={handleScenarioSelect}
+              selectedScenarioId={selectedScenario?.id}
+            />
+          </div>
+        ) : selectedScenario ? (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+                  Active Scenario: {selectedScenario.name}
+                </h4>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  {selectedScenario.description}
+                </p>
+                <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                  <div>Property: {selectedScenario.context.property.address}</div>
+                  <div>Buyer: {selectedScenario.context.buyer.type.replace(/-/g, ' ')}</div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedScenario(null);
+                  setShowScenarioSelector(true);
+                }}
+              >
+                Change
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            onClick={() => setShowScenarioSelector(true)}
+            className="w-full"
+          >
+            Select Practice Scenario (Optional)
+          </Button>
+        )}
+
         {showSettings && (
           <div className="border rounded-lg p-4 space-y-2 bg-gray-50 dark:bg-gray-900">
             <div className="flex items-center justify-between mb-4">
