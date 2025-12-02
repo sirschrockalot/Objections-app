@@ -1,22 +1,81 @@
 'use client';
 
 import { Objection } from '@/types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { getLatestConfidenceRating, saveConfidenceRating, upvoteResponse, isResponseUpvoted, getObjections, saveNote, getNote } from '@/lib/storage';
+import { Star, ThumbsUp, GitCompare, StickyNote, FileText } from 'lucide-react';
+import ResponseComparison from './ResponseComparison';
+import ResponseTemplateBuilder from './ResponseTemplateBuilder';
 
 interface ObjectionCardProps {
   objection: Objection;
   onAddResponse: (objectionId: string, responseText: string) => void;
+  onRatingChange?: () => void;
+  onUpvote?: () => void;
 }
 
-export default function ObjectionCard({ objection, onAddResponse }: ObjectionCardProps) {
+const categoryColors: Record<string, string> = {
+  'Price': 'bg-red-100 text-red-800 border-red-300',
+  'Timing': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  'Trust': 'bg-purple-100 text-purple-800 border-purple-300',
+  'Property': 'bg-green-100 text-green-800 border-green-300',
+  'Financial': 'bg-blue-100 text-blue-800 border-blue-300',
+  'Interest': 'bg-orange-100 text-orange-800 border-orange-300',
+};
+
+export default function ObjectionCard({ objection, onAddResponse, onRatingChange, onUpvote }: ObjectionCardProps) {
   const [showResponses, setShowResponses] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newResponse, setNewResponse] = useState('');
+  const [confidenceRating, setConfidenceRating] = useState<number | null>(null);
+  const [hoveredRating, setHoveredRating] = useState<number | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonResponse, setComparisonResponse] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
+  const [note, setNote] = useState(objection.personalNote || '');
+  const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
 
-  const allResponses = [...objection.defaultResponses, ...objection.customResponses];
+  // Sort responses: custom responses by upvotes (desc), then default responses
+  const sortedResponses = [...objection.customResponses]
+    .sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))
+    .concat(objection.defaultResponses);
+
+  useEffect(() => {
+    setConfidenceRating(getLatestConfidenceRating(objection.id));
+    const savedNote = getNote(objection.id);
+    setNote(savedNote || '');
+  }, [objection.id]);
+
+  const handleSaveNote = () => {
+    saveNote(objection.id, note);
+    if (onRatingChange) {
+      onRatingChange();
+    }
+  };
+
+  const handleUseTemplate = (template: any) => {
+    const templateText = `${template.acknowledge}\n\n${template.reframe}\n\n${template.value}\n\n${template.nextStep}`;
+    setNewResponse(templateText);
+    setShowTemplateBuilder(false);
+  };
+
+  const handleUpvote = (responseId: string) => {
+    upvoteResponse(objection.id, responseId);
+    if (onUpvote) {
+      onUpvote();
+    }
+  };
+
+  const handleRatingClick = (rating: number) => {
+    saveConfidenceRating(objection.id, rating);
+    setConfidenceRating(rating);
+    if (onRatingChange) {
+      onRatingChange();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +87,13 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
     }
   };
 
+  const handleCompareResponse = () => {
+    if (newResponse.trim()) {
+      setComparisonResponse(newResponse.trim());
+      setShowComparison(true);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -36,12 +102,61 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
     >
       <Card className="max-w-4xl w-full mx-auto shadow-xl">
         <CardHeader>
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                categoryColors[objection.category] || 'bg-gray-100 text-gray-800 border-gray-300'
+              }`}>
+                {objection.category}
+              </span>
+              {objection.difficulty && (
+                <span className="text-xs font-medium px-2 py-1 rounded bg-gray-200 text-gray-700">
+                  {objection.difficulty}
+                </span>
+              )}
+            </div>
+          </div>
           <CardTitle className="text-3xl mb-4">Objection</CardTitle>
           <CardDescription className="text-xl text-gray-700 leading-relaxed">
             {objection.text}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Confidence Rating Section */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Rate Your Confidence:</p>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      type="button"
+                      onClick={() => handleRatingClick(rating)}
+                      onMouseEnter={() => setHoveredRating(rating)}
+                      onMouseLeave={() => setHoveredRating(null)}
+                      className="transition-transform hover:scale-125 focus:outline-none"
+                    >
+                      <Star
+                        className={`w-8 h-8 ${
+                          (hoveredRating !== null && rating <= hoveredRating) ||
+                          (hoveredRating === null && confidenceRating !== null && rating <= confidenceRating)
+                            ? 'fill-yellow-400 text-yellow-400'
+                            : 'fill-gray-200 text-gray-300'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                {confidenceRating && (
+                  <p className="text-xs text-gray-600 mt-2">
+                    Your confidence: {confidenceRating}/5
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
               <Button
@@ -50,7 +165,7 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
                 size="lg"
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
-                {showResponses ? 'Hide' : 'Show'} Responses ({allResponses.length})
+                {showResponses ? 'Hide' : 'Show'} Responses ({sortedResponses.length})
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
@@ -66,7 +181,45 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
                 {showAddForm ? 'Cancel' : 'Add'} Your Response
               </Button>
             </motion.div>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                onClick={() => setShowNotes(!showNotes)}
+                variant="outline"
+                size="lg"
+                className="w-full"
+              >
+                <StickyNote className="w-4 h-4 mr-2" />
+                {showNotes ? 'Hide' : 'Notes'}
+              </Button>
+            </motion.div>
           </div>
+
+          {/* Notes Section */}
+          <AnimatePresence>
+            {showNotes && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
+              >
+                <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                  <StickyNote className="w-4 h-4" />
+                  Personal Notes
+                </h3>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  onBlur={handleSaveNote}
+                  placeholder="Add your personal notes about this objection... (e.g., what worked, what didn't, tips for next time)"
+                  className="w-full p-3 border border-yellow-300 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-none"
+                  rows={4}
+                />
+                <p className="text-xs text-gray-500">Notes are saved automatically and private to you</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {showAddForm && (
@@ -85,15 +238,42 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
                   className="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                   rows={4}
                 />
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                      <Button
+                        type="submit"
+                        variant="default"
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Save Response
+                      </Button>
+                    </motion.div>
+                    {newResponse.trim() && (
+                      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCompareResponse}
+                          className="flex items-center gap-2"
+                        >
+                          <GitCompare className="w-4 h-4" />
+                          Compare
+                        </Button>
+                      </motion.div>
+                    )}
+                  </div>
                   <Button
-                    type="submit"
-                    variant="default"
-                    className="bg-green-600 hover:bg-green-700"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTemplateBuilder(!showTemplateBuilder)}
+                    className="w-full flex items-center justify-center gap-2"
                   >
-                    Save Response
+                    <FileText className="w-4 h-4" />
+                    {showTemplateBuilder ? 'Hide' : 'Use'} Response Template
                   </Button>
-                </motion.div>
+                </div>
               </motion.form>
             )}
           </AnimatePresence>
@@ -108,46 +288,103 @@ export default function ObjectionCard({ objection, onAddResponse }: ObjectionCar
                 className="space-y-4"
               >
                 <h3 className="text-xl font-semibold text-gray-800 mb-4">Responses:</h3>
-                {allResponses.length === 0 ? (
+                {sortedResponses.length === 0 ? (
                   <p className="text-gray-500 italic">No responses yet. Be the first to add one!</p>
                 ) : (
-                  allResponses.map((response, index) => (
-                    <motion.div
-                      key={response.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1, duration: 0.3 }}
-                      className={`p-4 rounded-lg border-l-4 ${
-                        response.isCustom
-                          ? 'bg-green-50 border-green-500'
-                          : 'bg-blue-50 border-blue-500'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <span
-                          className={`text-xs font-semibold px-2 py-1 rounded ${
-                            response.isCustom
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-blue-200 text-blue-800'
-                          }`}
-                        >
-                          {response.isCustom ? 'Custom Response' : 'Default Response'}
-                        </span>
-                        {response.createdAt && (
-                          <span className="text-xs text-gray-500">
-                            {new Date(response.createdAt).toLocaleDateString()}
-                          </span>
+                  sortedResponses.map((response, index) => {
+                    const isUpvoted = response.isCustom && isResponseUpvoted(objection.id, response.id);
+                    const upvoteCount = response.upvotes || 0;
+                    const isTopResponse = response.isCustom && upvoteCount > 0 && index === 0 && 
+                      sortedResponses.filter(r => r.isCustom && (r.upvotes || 0) > 0).length > 0;
+                    
+                    return (
+                      <motion.div
+                        key={response.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1, duration: 0.3 }}
+                        className={`p-4 rounded-lg border-l-4 relative ${
+                          response.isCustom
+                            ? 'bg-green-50 border-green-500'
+                            : 'bg-blue-50 border-blue-500'
+                        } ${isTopResponse ? 'ring-2 ring-yellow-400' : ''}`}
+                      >
+                        {isTopResponse && (
+                          <div className="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                            TOP
+                          </div>
                         )}
-                      </div>
-                      <p className="text-gray-700 leading-relaxed">{response.text}</p>
-                    </motion.div>
-                  ))
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-xs font-semibold px-2 py-1 rounded ${
+                                response.isCustom
+                                  ? 'bg-green-200 text-green-800'
+                                  : 'bg-blue-200 text-blue-800'
+                              }`}
+                            >
+                              {response.isCustom ? 'Custom Response' : 'Default Response'}
+                            </span>
+                            {response.isCustom && (
+                              <button
+                                onClick={() => handleUpvote(response.id)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                  isUpvoted
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                <ThumbsUp className={`w-3 h-3 ${isUpvoted ? 'fill-current' : ''}`} />
+                                {upvoteCount}
+                              </button>
+                            )}
+                          </div>
+                          {response.createdAt && (
+                            <span className="text-xs text-gray-500">
+                              {new Date(response.createdAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-700 leading-relaxed">{response.text}</p>
+                      </motion.div>
+                    );
+                  })
                 )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Template Builder */}
+          <AnimatePresence>
+            {showTemplateBuilder && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mt-4"
+              >
+                <ResponseTemplateBuilder
+                  onSelectTemplate={handleUseTemplate}
+                  onClose={() => setShowTemplateBuilder(false)}
+                />
               </motion.div>
             )}
           </AnimatePresence>
         </CardContent>
       </Card>
+
+      {/* Response Comparison Modal */}
+      {showComparison && (
+        <ResponseComparison
+          objection={objection}
+          userResponse={comparisonResponse}
+          onClose={() => {
+            setShowComparison(false);
+            setComparisonResponse('');
+          }}
+        />
+      )}
     </motion.div>
   );
 }

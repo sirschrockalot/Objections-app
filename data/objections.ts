@@ -4,6 +4,8 @@ export const initialObjections: Objection[] = [
   {
     id: '1',
     text: "Price is too high.",
+    category: 'Price',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '1-1',
@@ -16,6 +18,8 @@ export const initialObjections: Objection[] = [
   {
     id: '2',
     text: "I need to run the numbers first.",
+    category: 'Timing',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '2-1',
@@ -28,6 +32,8 @@ export const initialObjections: Objection[] = [
   {
     id: '3',
     text: "I'm not interested.",
+    category: 'Interest',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '3-1',
@@ -40,6 +46,8 @@ export const initialObjections: Objection[] = [
   {
     id: '4',
     text: "I only buy in certain areas.",
+    category: 'Interest',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '4-1',
@@ -52,6 +60,8 @@ export const initialObjections: Objection[] = [
   {
     id: '5',
     text: "I'm too busy.",
+    category: 'Timing',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '5-1',
@@ -64,6 +74,8 @@ export const initialObjections: Objection[] = [
   {
     id: '6',
     text: "I'm already working with other wholesalers.",
+    category: 'Trust',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '6-1',
@@ -76,6 +88,8 @@ export const initialObjections: Objection[] = [
   {
     id: '7',
     text: "Send it to me and I'll look later.",
+    category: 'Timing',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '7-1',
@@ -88,6 +102,8 @@ export const initialObjections: Objection[] = [
   {
     id: '8',
     text: "This needs too much work.",
+    category: 'Property',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '8-1',
@@ -100,6 +116,8 @@ export const initialObjections: Objection[] = [
   {
     id: '9',
     text: "It's not worth that ARV.",
+    category: 'Price',
+    difficulty: 'advanced',
     defaultResponses: [
       {
         id: '9-1',
@@ -112,6 +130,8 @@ export const initialObjections: Objection[] = [
   {
     id: '10',
     text: "The neighborhood isn't great.",
+    category: 'Property',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '10-1',
@@ -124,6 +144,8 @@ export const initialObjections: Objection[] = [
   {
     id: '11',
     text: "I'm not liquid right now.",
+    category: 'Timing',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '11-1',
@@ -136,6 +158,8 @@ export const initialObjections: Objection[] = [
   {
     id: '12',
     text: "My lender won't approve it.",
+    category: 'Financial',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '12-1',
@@ -148,6 +172,8 @@ export const initialObjections: Objection[] = [
   {
     id: '13',
     text: "Is this an assignment? I don't like assignments.",
+    category: 'Trust',
+    difficulty: 'advanced',
     defaultResponses: [
       {
         id: '13-1',
@@ -160,6 +186,8 @@ export const initialObjections: Objection[] = [
   {
     id: '14',
     text: "I don't pay both sides of closing costs.",
+    category: 'Financial',
+    difficulty: 'advanced',
     defaultResponses: [
       {
         id: '14-1',
@@ -172,6 +200,8 @@ export const initialObjections: Objection[] = [
   {
     id: '15',
     text: "I don't want to get into a bidding war.",
+    category: 'Interest',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '15-1',
@@ -184,6 +214,8 @@ export const initialObjections: Objection[] = [
   {
     id: '16',
     text: "I want the seller to make repairs first.",
+    category: 'Interest',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '16-1',
@@ -196,6 +228,8 @@ export const initialObjections: Objection[] = [
   {
     id: '17',
     text: "I don't trust wholesalers.",
+    category: 'Trust',
+    difficulty: 'advanced',
     defaultResponses: [
       {
         id: '17-1',
@@ -208,6 +242,8 @@ export const initialObjections: Objection[] = [
   {
     id: '18',
     text: "I'll wait for something better.",
+    category: 'Interest',
+    difficulty: 'intermediate',
     defaultResponses: [
       {
         id: '18-1',
@@ -220,6 +256,8 @@ export const initialObjections: Objection[] = [
   {
     id: '19',
     text: "Your photos don't show enough.",
+    category: 'Property',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '19-1',
@@ -232,6 +270,8 @@ export const initialObjections: Objection[] = [
   {
     id: '20',
     text: "Call me back later.",
+    category: 'Timing',
+    difficulty: 'beginner',
     defaultResponses: [
       {
         id: '20-1',
