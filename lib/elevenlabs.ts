@@ -18,10 +18,12 @@ export class ElevenLabsClient {
   private ws: WebSocket | null = null;
   private agentId: string;
   private apiKey: string;
+  private config: ElevenLabsAgentConfig;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private isIntentionallyClosed = false;
+  private scenarioContext: string | null = null;
 
   // Event handlers
   private onMessage?: (message: ConversationMessage) => void;
@@ -31,6 +33,7 @@ export class ElevenLabsClient {
   private onTranscript?: (text: string, isInterim: boolean) => void;
 
   constructor(config: ElevenLabsAgentConfig) {
+    this.config = config;
     this.agentId = config.agentId;
     // Get API key from environment variable
     this.apiKey =
@@ -38,6 +41,11 @@ export class ElevenLabsClient {
     
     if (!this.apiKey) {
       console.warn('ElevenLabs API key not found. Voice agent will not work.');
+    }
+
+    // Store scenario context if provided
+    if (config.scenarioContext) {
+      this.scenarioContext = config.scenarioContext;
     }
   }
 
@@ -66,14 +74,32 @@ export class ElevenLabsClient {
           this.onStatusChange?.('connected');
 
           // Send conversation initialization
-          this.send({
+          const initMessage: any = {
             type: 'conversation_initiation_settings',
             conversation_config: {
               agent: {
                 agent_id: this.agentId,
               },
             },
-          });
+          };
+
+          // Include scenario context if provided
+          if (this.config.scenarioContext) {
+            // Send scenario context as a system message or in conversation config
+            // ElevenLabs may support custom instructions in the conversation config
+            // For now, we'll send it as an initial message after connection
+            this.scenarioContext = this.config.scenarioContext;
+          }
+
+          this.send(initMessage);
+
+          // If we have scenario context, send it as an initial system message
+          if (this.scenarioContext) {
+            // Wait a moment for connection to stabilize, then send context
+            setTimeout(() => {
+              this.sendContextMessage(this.scenarioContext!);
+            }, 500);
+          }
 
           resolve();
         };
@@ -201,6 +227,32 @@ export class ElevenLabsClient {
       });
     } else {
       console.warn('WebSocket not connected. Cannot send text.');
+    }
+  }
+
+  /**
+   * Send scenario context message to the agent
+   */
+  private sendContextMessage(context: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      // Send context as an instruction message
+      // ElevenLabs Conversational AI supports sending instructions via text messages
+      // We'll send it as a formatted instruction that the agent can use
+      this.send({
+        type: 'user_message',
+        text: `[SYSTEM INSTRUCTION] ${context}`,
+      });
+    }
+  }
+
+  /**
+   * Set scenario context for the conversation
+   */
+  setScenarioContext(context: string | null): void {
+    this.scenarioContext = context;
+    // If already connected, send the context
+    if (this.ws?.readyState === WebSocket.OPEN && context) {
+      this.sendContextMessage(context);
     }
   }
 

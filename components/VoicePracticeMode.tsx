@@ -12,6 +12,7 @@ import { VoiceScenario } from '@/data/voiceScenarios';
 import { checkAudioSupport } from '@/lib/audioUtils';
 import { getAgentConfig, saveAgentConfig } from '@/lib/agentConfigStorage';
 import { saveVoiceScenarioSession, VoiceScenarioSession } from '@/lib/voiceScenarioStorage';
+import { formatScenarioContext } from '@/lib/scenarioContextFormatter';
 import { AlertCircle, Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -51,8 +52,12 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     isReady,
   } = useElevenLabsAgent({
     config: agentConfig,
+    scenarioContext: selectedScenario ? formatScenarioContext(selectedScenario) : undefined,
     onSessionStart: (session) => {
       console.log('Session started:', session);
+      if (selectedScenario) {
+        console.log('Scenario context injected:', selectedScenario.name);
+      }
     },
     onSessionEnd: (session) => {
       console.log('Session ended:', session);
@@ -293,16 +298,25 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
         ) : selectedScenario ? (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100">
-                  Active Scenario: {selectedScenario.name}
-                </h4>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+                    Active Scenario: {selectedScenario.name}
+                  </h4>
+                  <span className="px-2 py-0.5 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 text-xs rounded-full">
+                    Context Active
+                  </span>
+                </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                   {selectedScenario.description}
                 </p>
-                <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                  <div>Property: {selectedScenario.context.property.address}</div>
-                  <div>Buyer: {selectedScenario.context.buyer.type.replace(/-/g, ' ')}</div>
+                <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                  <div><strong>Property:</strong> {selectedScenario.context.property.address}</div>
+                  <div><strong>Buyer:</strong> {selectedScenario.context.buyer.type.replace(/-/g, ' ')} ({selectedScenario.context.buyer.experience})</div>
+                  <div><strong>Budget:</strong> ${selectedScenario.context.buyer.budget.toLocaleString()}</div>
+                  <div className="mt-2 text-blue-500 dark:text-blue-400 italic">
+                    ✓ Agent will receive scenario context and instructions
+                  </div>
                 </div>
               </div>
               <Button

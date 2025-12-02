@@ -25,7 +25,7 @@ import SwipeablePracticeView from '@/components/SwipeablePracticeView';
 import ScenarioPractice from '@/components/ScenarioPractice';
 import { practiceScenarios, getScenariosByDifficulty } from '@/data/scenarios';
 import LearningPaths from '@/components/LearningPaths';
-import { getCurrentPathObjection, completePathStep } from '@/lib/learningPaths';
+import { getCurrentPathObjection, completePathStep, isPathCompleted } from '@/lib/learningPaths';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyTip from '@/components/DailyTip';
@@ -975,7 +975,6 @@ export default function Home() {
                       if (selectedLearningPath && currentObjection) {
                         completePathStep(selectedLearningPath, currentObjection.id);
                         // Check if path is completed
-                        const { isPathCompleted } = require('@/lib/learningPaths');
                         if (isPathCompleted(selectedLearningPath)) {
                           alert('Congratulations! You completed the learning path!');
                           setSelectedLearningPath(null);

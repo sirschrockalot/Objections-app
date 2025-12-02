@@ -14,13 +14,14 @@ import {
 
 interface UseElevenLabsAgentOptions {
   config: ElevenLabsAgentConfig;
+  scenarioContext?: string; // Optional scenario context to inject
   onSessionStart?: (session: VoiceSession) => void;
   onSessionEnd?: (session: VoiceSession) => void;
   autoConnect?: boolean;
 }
 
 export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
-  const { config, onSessionStart, onSessionEnd, autoConnect = false } = options;
+  const { config, scenarioContext, onSessionStart, onSessionEnd, autoConnect = false } = options;
 
   // State
   const [state, setState] = useState<VoiceAgentState>({
@@ -44,7 +45,11 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
   // Initialize client
   useEffect(() => {
     if (!clientRef.current) {
-      clientRef.current = createElevenLabsClient(config);
+      // Include scenario context in config if provided
+      const configWithContext = scenarioContext
+        ? { ...config, scenarioContext }
+        : config;
+      clientRef.current = createElevenLabsClient(configWithContext);
 
       // Set up event handlers
       clientRef.current.setOnMessage((message) => {
@@ -99,6 +104,16 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
       audioPlaybackRef.current = new AudioPlayback();
     }
 
+    // Update scenario context if client exists and context changed
+    if (clientRef.current) {
+      if (scenarioContext) {
+        clientRef.current.setScenarioContext(scenarioContext);
+      } else {
+        // Clear context if scenario is removed
+        clientRef.current.setScenarioContext(null);
+      }
+    }
+
     // Auto-connect if enabled
     if (autoConnect && !state.isConnected) {
       connect();
@@ -110,7 +125,7 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
       audioPlaybackRef.current?.cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.agentId, autoConnect]);
+  }, [config.agentId, scenarioContext, autoConnect]);
 
   // Connect to agent
   const connect = useCallback(async () => {

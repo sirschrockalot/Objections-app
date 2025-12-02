@@ -261,6 +261,7 @@ export interface ElevenLabsAgentConfig {
     temperature?: number;
     maxResponseLength?: number;
   };
+  scenarioContext?: string; // Formatted scenario instructions/context
 }
 
 export interface VoiceAgentState {
