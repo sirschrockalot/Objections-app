@@ -10,11 +10,11 @@ A Next.js application designed to help real estate disposition agents practice o
 ## Features
 
 - **Random Objection Display**: Click a button to get a random objection to practice with
-- **Animated Loading**: Engaging animation while the app "searches" for the next objection
+- **Animated Loading**: Engaging roulette-style animation while the app "searches" for the next objection
 - **Response Library**: View default responses for each objection
 - **Custom Responses**: Add your own responses and save them for future use
 - **Team Sharing**: All custom responses are saved and visible to all team members
-- **Modern UI**: Beautiful, responsive design with smooth animations
+- **Modern UI**: Beautiful, responsive design with smooth animations powered by Animate UI and framer-motion
 
 ## Getting Started
 
@@ -47,7 +47,7 @@ npm start
 ## How to Use
 
 1. **Start a Practice Session**: Click the "Start Practice Session" button
-2. **View Objection**: A random objection will be displayed after a brief animation
+2. **View Objection**: A random objection will be displayed after a brief roulette-style animation
 3. **See Responses**: Click "Show Responses" to view suggested responses
 4. **Add Your Response**: Click "Add Your Response" to contribute your own answer
 5. **Get Next Objection**: Click "Get Next Objection" to practice with another one
@@ -69,11 +69,13 @@ objections-app/
 │   └── globals.css       # Global styles
 ├── components/
 │   ├── ObjectionCard.tsx # Component for displaying objections
-│   └── LoadingAnimation.tsx # Loading animation component
+│   ├── LoadingAnimation.tsx # Loading animation component
+│   └── ui/               # Animate UI components (Button, Card)
 ├── data/
-│   └── objections.ts     # Initial objection data
+│   └── objections.ts     # Initial objection data (20 objections)
 ├── lib/
-│   └── storage.ts        # Data persistence utilities
+│   ├── storage.ts        # Data persistence utilities
+│   └── utils.ts          # Utility functions
 └── types/
     └── index.ts          # TypeScript type definitions
 ```
@@ -86,7 +88,15 @@ Edit `data/objections.ts` to add more objections with their default responses.
 
 ### Styling
 
-The app uses Tailwind CSS. Modify the classes in components to customize the appearance.
+The app uses Tailwind CSS and Animate UI components. Modify the classes in components to customize the appearance.
+
+## Technologies Used
+
+- **Next.js 16** - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **Framer Motion** - Animations
+- **Animate UI / shadcn/ui** - UI components
 
 ## Future Enhancements
 
