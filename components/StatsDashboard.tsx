@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import {
   getTotalSessions,
@@ -10,10 +11,26 @@ import {
   getCategoryStats,
   getObjections,
 } from '@/lib/storage';
-import { Trophy, Target, Flame, TrendingUp } from 'lucide-react';
+import { Trophy, Target, Flame, TrendingUp, BarChart3 } from 'lucide-react';
 import Achievements from './Achievements';
+import AnalyticsDashboard from './AnalyticsDashboard';
+import PointsDisplay from './PointsDisplay';
+import CategoryMasteryBadges from './CategoryMasteryBadges';
+import SpacedRepetitionStats from './SpacedRepetitionStats';
+import ExportImport from './ExportImport';
+import DailyTip from './DailyTip';
+import ObjectionOfTheDay from './ObjectionOfTheDay';
+import ResponseTechniques from './ResponseTechniques';
+import LearningPaths from './LearningPaths';
+import VoiceSessionHistory from './VoiceSessionHistory';
+import VoiceSessionAnalytics from './VoiceSessionAnalytics';
 
-export default function StatsDashboard() {
+interface StatsDashboardProps {
+  onSelectObjection?: (objectionId: string) => void;
+}
+
+export default function StatsDashboard({ onSelectObjection }: StatsDashboardProps) {
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [stats, setStats] = useState({
     totalSessions: 0,
     totalObjections: 0,
@@ -23,22 +40,48 @@ export default function StatsDashboard() {
 
   useEffect(() => {
     const loadStats = () => {
-      const totalSessions = getTotalSessions();
-      const totalObjections = getTotalObjectionsPracticed();
-      const streak = getPracticeStreak();
-      const categoryStats = getCategoryStats();
-      
-      setStats({
-        totalSessions,
-        totalObjections,
-        streak,
-        categoryStats,
-      });
+      try {
+        const totalSessions = getTotalSessions();
+        const totalObjections = getTotalObjectionsPracticed();
+        const streak = getPracticeStreak();
+        const categoryStats = getCategoryStats();
+        
+        setStats(prev => {
+          // Only update if values actually changed - use deep comparison for categoryStats
+          const categoryStatsChanged = 
+            Object.keys(prev.categoryStats).length !== Object.keys(categoryStats).length ||
+            Object.keys(categoryStats).some(key => {
+              const prevStat = prev.categoryStats[key];
+              const newStat = categoryStats[key];
+              return !prevStat || 
+                     prevStat.practiced !== newStat.practiced || 
+                     prevStat.total !== newStat.total;
+            });
+          
+          if (
+            prev.totalSessions === totalSessions &&
+            prev.totalObjections === totalObjections &&
+            prev.streak === streak &&
+            !categoryStatsChanged
+          ) {
+            return prev; // No changes, return previous state
+          }
+          
+          return {
+            totalSessions,
+            totalObjections,
+            streak,
+            categoryStats,
+          };
+        });
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
     };
 
     loadStats();
-    // Refresh stats every second for real-time updates
-    const interval = setInterval(loadStats, 1000);
+    // Refresh stats every 10 seconds (further reduced to prevent loops)
+    const interval = setInterval(loadStats, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -58,7 +101,23 @@ export default function StatsDashboard() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Progress</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Your Progress</h2>
+        <Button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          <BarChart3 className="w-4 h-4" />
+          {showAnalytics ? 'Hide' : 'Show'} Advanced Analytics
+        </Button>
+      </div>
+
+      {showAnalytics && (
+        <div className="mb-6">
+          <AnalyticsDashboard onSelectObjection={onSelectObjection} />
+        </div>
+      )}
       
       {/* Main Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -173,8 +232,38 @@ export default function StatsDashboard() {
         </Card>
       )}
 
+      {/* Daily Tip */}
+      <DailyTip autoShow={true} />
+
+      {/* Objection of the Day */}
+      <ObjectionOfTheDay onSelectObjection={onSelectObjection} />
+
+      {/* Points & Levels */}
+      <PointsDisplay />
+
+      {/* Spaced Repetition Stats */}
+      <SpacedRepetitionStats />
+
+      {/* Category Mastery Badges */}
+      <CategoryMasteryBadges />
+
       {/* Achievements */}
       <Achievements />
+
+      {/* Export/Import */}
+      <ExportImport />
+
+      {/* Response Techniques */}
+      <ResponseTechniques />
+
+      {/* Learning Paths */}
+      <LearningPaths onSelectObjection={onSelectObjection} />
+
+      {/* Voice Session Analytics */}
+      <VoiceSessionAnalytics />
+
+      {/* Voice Session History */}
+      <VoiceSessionHistory />
     </div>
   );
 }

@@ -1,4 +1,6 @@
-# Objection Practice App
+# ResponseReady
+
+**Always Ready. Always Confident.**
 
 A Next.js application designed to help real estate disposition agents practice overcoming buyer objections. This interactive training tool allows agents to:
 
@@ -62,7 +64,7 @@ Custom responses are stored in the browser's localStorage, making them:
 ## Project Structure
 
 ```
-objections-app/
+response-ready/
 ├── app/
 │   ├── page.tsx          # Main application page
 │   ├── layout.tsx        # Root layout

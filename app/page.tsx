@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Objection, Response, PracticeSession } from '@/types';
 import { 
   getObjections, 
   saveCustomResponse, 
   savePracticeSession,
   getObjectionsNeedingPractice,
+  recordPracticeHistory,
+  getLatestConfidenceRating,
 } from '@/lib/storage';
+import { addPoints, POINTS_VALUES } from '@/lib/gamification';
+import { getDueForReview, recordReview, getAllReviewSchedules } from '@/lib/spacedRepetition';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,10 +20,23 @@ import LoadingAnimation from '@/components/LoadingAnimation';
 import StatsDashboard from '@/components/StatsDashboard';
 import Celebration from '@/components/Celebration';
 import ChallengeMode from '@/components/ChallengeMode';
+import ReviewMode from '@/components/ReviewMode';
+import SwipeablePracticeView from '@/components/SwipeablePracticeView';
+import ScenarioPractice from '@/components/ScenarioPractice';
+import { practiceScenarios, getScenariosByDifficulty } from '@/data/scenarios';
+import LearningPaths from '@/components/LearningPaths';
+import { getCurrentPathObjection, completePathStep } from '@/lib/learningPaths';
+import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import DailyTip from '@/components/DailyTip';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { checkAchievements } from '@/lib/achievements';
-import { Search, Filter, X } from 'lucide-react';
+import VoicePracticeMode from '@/components/VoicePracticeMode';
+import { saveVoiceSession } from '@/lib/voiceSessionStorage';
+import { VoiceSession } from '@/types';
+import { Search, Filter, X, Keyboard, Mic } from 'lucide-react';
 
-type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge';
+type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
 export default function Home() {
   const [allObjections, setAllObjections] = useState<Objection[]>([]);
@@ -34,11 +51,18 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
   const sessionStartTime = useRef<number | null>(null);
   const sessionObjections = useRef<string[]>([]);
+  const currentSessionId = useRef<string | null>(null);
   const [celebration, setCelebration] = useState<{ type: 'achievement' | 'streak' | 'milestone' | 'session'; message: string; icon?: string } | null>(null);
   const previousAchievements = useRef<Set<string>>(new Set());
   const [challengeConfig, setChallengeConfig] = useState<{ timeLimit: number; goal: number } | null>(null);
   const [challengeCompleted, setChallengeCompleted] = useState(0);
   const [challengeTimeUsed, setChallengeTimeUsed] = useState(0);
+  const [showReviewMode, setShowReviewMode] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+  const [scenarioDifficulty, setScenarioDifficulty] = useState<'beginner' | 'intermediate' | 'advanced' | 'all'>('all');
+  const [selectedLearningPath, setSelectedLearningPath] = useState<string | null>(null);
+  const objectionCardRef = useRef<{ revealResponses?: () => void; addResponse?: () => void } | null>(null);
 
   useEffect(() => {
     const objections = getObjections();
@@ -72,9 +96,26 @@ export default function Home() {
     if (practiceMode === 'weakness') {
       const needsPractice = getObjectionsNeedingPractice(3);
       filtered = filtered.filter(obj => needsPractice.includes(obj.id));
+    } else if (practiceMode === 'spaced') {
+      const dueForReview = getDueForReview();
+      if (dueForReview.length === 0) {
+        // If no reviews are due, show all scheduled objections
+        const allSchedules = getAllReviewSchedules();
+        const scheduledIds = allSchedules.map(s => s.objectionId);
+        filtered = filtered.filter(obj => scheduledIds.includes(obj.id));
+      } else {
+        filtered = filtered.filter(obj => dueForReview.includes(obj.id));
+      }
     }
 
-    setFilteredObjections(filtered);
+    // Only update if filtered list actually changed
+    setFilteredObjections(prev => {
+      if (prev.length !== filtered.length) return filtered;
+      // Check if any objection IDs changed
+      const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+      if (idsChanged) return filtered;
+      return prev; // No changes, return previous state
+    });
   }, [searchQuery, selectedCategory, practiceMode, allObjections]);
 
   const getAvailableObjections = () => {
@@ -91,6 +132,7 @@ export default function Home() {
     // Start session tracking if not already started
     if (sessionStartTime.current === null) {
       sessionStartTime.current = Date.now();
+      currentSessionId.current = `session-${sessionStartTime.current}`;
       sessionObjections.current = [];
     }
 
@@ -107,6 +149,17 @@ export default function Home() {
     if (!sessionObjections.current.includes(selectedObjection.id)) {
       sessionObjections.current.push(selectedObjection.id);
     }
+    
+    // Record practice history
+    if (currentSessionId.current) {
+      const latestRating = getLatestConfidenceRating(selectedObjection.id);
+      recordPracticeHistory(selectedObjection.id, currentSessionId.current, latestRating || undefined);
+      
+      // Update spaced repetition schedule if rating exists
+      if (latestRating) {
+        recordReview(selectedObjection.id, latestRating);
+      }
+    }
   };
 
   const checkForNewAchievements = () => {
@@ -118,6 +171,15 @@ export default function Home() {
       if (!previousAchievements.current.has(id)) {
         const achievement = currentAchievements.find(a => a.id === id);
         if (achievement) {
+          // Award points for achievement
+          try {
+            addPoints(POINTS_VALUES.ACHIEVEMENT_UNLOCKED, `Achievement unlocked: ${achievement.name}`, {
+              achievementId: id,
+            });
+          } catch (error) {
+            console.error('Error adding points:', error);
+          }
+          
           setCelebration({
             type: 'achievement',
             message: achievement.name,
@@ -145,7 +207,19 @@ export default function Home() {
         goal: challengeConfig?.goal,
       };
       savePracticeSession(session);
+      
+      // Award points for session
+      try {
+        addPoints(POINTS_VALUES.PRACTICE_SESSION, 'Completed practice session', {
+          duration,
+          objectionsCount: sessionObjections.current.length,
+        });
+      } catch (error) {
+        console.error('Error adding points:', error);
+      }
+      
       sessionStartTime.current = null;
+      currentSessionId.current = null;
       sessionObjections.current = [];
       setChallengeConfig(null);
       setChallengeCompleted(0);
@@ -170,9 +244,30 @@ export default function Home() {
 
     saveCustomResponse(objectionId, newResponse);
 
-    // Update local state
-    const updated = getObjections();
-    setAllObjections(updated);
+    // Award points for adding custom response
+    try {
+      addPoints(POINTS_VALUES.CUSTOM_RESPONSE, 'Added custom response', {
+        objectionId,
+      });
+    } catch (error) {
+      console.error('Error adding points:', error);
+    }
+
+    // Update local state - only update if objection actually changed
+    setAllObjections(prev => {
+      const updated = getObjections();
+      // Check if any objections actually changed
+      if (prev.length !== updated.length) return updated;
+      const changed = prev.some((p, i) => {
+        const u = updated[i];
+        if (!u || p.id !== u.id) return true;
+        // Check if custom responses changed
+        if (p.customResponses.length !== u.customResponses.length) return true;
+        return false;
+      });
+      return changed ? updated : prev;
+    });
+    
     setCurrentObjection((prev) => {
       if (!prev || prev.id !== objectionId) return prev;
       return {
@@ -183,34 +278,122 @@ export default function Home() {
   };
 
   const handleRatingChange = () => {
-    // Refresh objections to update filtered list for weakness mode
-    const updated = getObjections();
-    setAllObjections(updated);
+    // Update practice history with new rating if in a session
+    if (currentObjection && currentSessionId.current) {
+      const latestRating = getLatestConfidenceRating(currentObjection.id);
+      if (latestRating) {
+        recordPracticeHistory(currentObjection.id, currentSessionId.current, latestRating);
+        // Update spaced repetition schedule
+        recordReview(currentObjection.id, latestRating);
+        
+        // Update learning path progress if in a path
+        if (selectedLearningPath) {
+          completePathStep(selectedLearningPath, currentObjection.id);
+        }
+      }
+    }
+    
+    // Only refresh objections if in weakness mode (needs practice filter)
+    // Use a ref to track if we need to update to prevent loops
+    if (practiceMode === 'weakness') {
+      // Force a re-filter by updating filteredObjections directly
+      // This avoids updating allObjections which would trigger the filter useEffect
+      const needsPractice = getObjectionsNeedingPractice(3);
+      setFilteredObjections(prev => {
+        const updated = getObjections();
+        const filtered = updated.filter(obj => needsPractice.includes(obj.id));
+        // Only update if filtered list changed
+        if (prev.length !== filtered.length) return filtered;
+        const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+        return idsChanged ? filtered : prev;
+      });
+    } else if (practiceMode === 'spaced') {
+      // Update filtered list for spaced repetition mode
+      const dueForReview = getDueForReview();
+      setFilteredObjections(prev => {
+        const updated = getObjections();
+        const filtered = updated.filter(obj => dueForReview.includes(obj.id));
+        // Only update if filtered list changed
+        if (prev.length !== filtered.length) return filtered;
+        const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+        return idsChanged ? filtered : prev;
+      });
+    }
   };
 
   const categories = Array.from(new Set(allObjections.map(obj => obj.category))).sort();
 
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNextObjection: () => {
+      if (hasStarted && !isLoading && currentObjection) {
+        handleGetObjection();
+      }
+    },
+    onRevealResponses: () => {
+      if (objectionCardRef.current?.revealResponses) {
+        objectionCardRef.current.revealResponses();
+      }
+    },
+    onAddResponse: () => {
+      if (objectionCardRef.current?.addResponse) {
+        objectionCardRef.current.addResponse();
+      }
+    },
+    onNewSession: () => {
+      if (hasStarted) {
+        handleEndSession();
+      }
+    },
+    onCloseModal: () => {
+      setShowShortcutsHelp(false);
+      setShowStats(false);
+      setShowFilters(false);
+      setShowReviewMode(false);
+    },
+    onToggleHelp: () => {
+      setShowShortcutsHelp(!showShortcutsHelp);
+    },
+  });
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="container mx-auto px-4 py-12">
         <header className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Objection Practice
+          <div className="flex items-center justify-end gap-2 mb-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
+              className="relative"
+              title="Keyboard shortcuts (?)"
+            >
+              <Keyboard className="h-5 w-5" />
+            </Button>
+            <ThemeToggle />
+          </div>
+          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
+            ResponseReady
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Master your responses to buyer objections and build confidence in your sales conversations
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Always Ready. Always Confident. Master your responses to buyer objections and build confidence in your sales conversations.
           </p>
         </header>
 
-        {/* Stats Dashboard Toggle */}
-        <div className="max-w-5xl mx-auto mb-6">
-          <Button
-            onClick={() => setShowStats(!showStats)}
-            variant="outline"
-            className="mb-4"
-          >
-            {showStats ? 'Hide' : 'Show'} Stats Dashboard
-          </Button>
+            {/* Daily Tip */}
+            <div className="max-w-5xl mx-auto mb-6">
+              <DailyTip autoShow={true} />
+            </div>
+
+            {/* Stats Dashboard Toggle */}
+            <div className="max-w-5xl mx-auto mb-6">
+              <Button
+                onClick={() => setShowStats(!showStats)}
+                variant="outline"
+                className="mb-4"
+              >
+                {showStats ? 'Hide' : 'Show'} Stats Dashboard
+              </Button>
           
           {showStats && (
             <motion.div
@@ -218,7 +401,16 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <StatsDashboard />
+              <StatsDashboard 
+                onSelectObjection={(objectionId) => {
+                  const objection = allObjections.find(o => o.id === objectionId);
+                  if (objection) {
+                    setCurrentObjection(objection);
+                    setHasStarted(true);
+                    setIsLoading(false);
+                  }
+                }}
+              />
             </motion.div>
           )}
         </div>
@@ -237,11 +429,11 @@ export default function Home() {
                     <label className="text-sm font-medium text-gray-700 mb-3 block">
                       Select how you want to practice:
                     </label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                       <Button
                         variant={practiceMode === 'random' ? 'default' : 'outline'}
                         size="lg"
-                        className="h-auto py-4 flex flex-col items-center gap-2"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px]"
                         onClick={() => {
                           setPracticeMode('random');
                           setChallengeConfig(null);
@@ -254,7 +446,7 @@ export default function Home() {
                       <Button
                         variant={practiceMode === 'category' ? 'default' : 'outline'}
                         size="lg"
-                        className="h-auto py-4 flex flex-col items-center gap-2"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px]"
                         onClick={() => {
                           setPracticeMode('category');
                           setChallengeConfig(null);
@@ -267,7 +459,7 @@ export default function Home() {
                       <Button
                         variant={practiceMode === 'weakness' ? 'default' : 'outline'}
                         size="lg"
-                        className="h-auto py-4 flex flex-col items-center gap-2"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px]"
                         onClick={() => {
                           setPracticeMode('weakness');
                           setChallengeConfig(null);
@@ -280,7 +472,7 @@ export default function Home() {
                       <Button
                         variant={practiceMode === 'challenge' ? 'default' : 'outline'}
                         size="lg"
-                        className="h-auto py-4 flex flex-col items-center gap-2 bg-gradient-to-br from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0"
+                        className="h-auto py-4 flex flex-col items-center gap-2 bg-gradient-to-br from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white border-0 min-h-[100px]"
                         onClick={() => {
                           setPracticeMode('challenge');
                           // Default challenge: 5 minutes, 10 objections
@@ -292,6 +484,71 @@ export default function Home() {
                         <span className="text-lg">⚡</span>
                         <span className="font-bold">Challenge</span>
                         <span className="text-xs opacity-90">Timed practice</span>
+                      </Button>
+                      <Button
+                        variant={practiceMode === 'review' ? 'default' : 'outline'}
+                        size="lg"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px]"
+                        onClick={() => {
+                          setPracticeMode('review');
+                          setChallengeConfig(null);
+                        }}
+                      >
+                        <span className="text-lg">📚</span>
+                        <span>Review</span>
+                        <span className="text-xs opacity-75">Practice history</span>
+                      </Button>
+                      <Button
+                        variant={practiceMode === 'spaced' ? 'default' : 'outline'}
+                        size="lg"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white border-0"
+                        onClick={() => {
+                          setPracticeMode('spaced');
+                          setChallengeConfig(null);
+                        }}
+                      >
+                        <span className="text-lg">🔄</span>
+                        <span className="font-semibold">Review Due</span>
+                        <span className="text-xs opacity-90">Spaced repetition</span>
+                      </Button>
+                      <Button
+                        variant={practiceMode === 'scenario' ? 'default' : 'outline'}
+                        size="lg"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white border-0"
+                        onClick={() => {
+                          setPracticeMode('scenario');
+                          setChallengeConfig(null);
+                        }}
+                      >
+                        <span className="text-lg">🎭</span>
+                        <span className="font-semibold">Scenario</span>
+                        <span className="text-xs opacity-90">Real-world practice</span>
+                      </Button>
+                      <Button
+                        variant={practiceMode === 'learning-path' ? 'default' : 'outline'}
+                        size="lg"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0"
+                        onClick={() => {
+                          setPracticeMode('learning-path');
+                          setChallengeConfig(null);
+                        }}
+                      >
+                        <span className="text-lg">📚</span>
+                        <span className="font-semibold">Learning Path</span>
+                        <span className="text-xs opacity-90">Guided progression</span>
+                      </Button>
+                      <Button
+                        variant={practiceMode === 'voice' ? 'default' : 'outline'}
+                        size="lg"
+                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white border-0"
+                        onClick={() => {
+                          setPracticeMode('voice');
+                          setChallengeConfig(null);
+                        }}
+                      >
+                        <Mic className="w-6 h-6" />
+                        <span className="font-semibold">Voice Practice</span>
+                        <span className="text-xs opacity-90">AI conversation</span>
                       </Button>
                     </div>
                   </div>
@@ -427,7 +684,7 @@ export default function Home() {
               <div className="text-center">
                 <Card className="shadow-xl">
                   <CardHeader>
-                    <CardTitle className="text-3xl">Ready to Practice?</CardTitle>
+                    <CardTitle className="text-3xl">Ready to Get ResponseReady?</CardTitle>
                     <CardDescription className="text-lg">
                       Click the button below to get a random objection. Practice your response,
                       view suggested answers, and add your own responses to help your team.
@@ -446,6 +703,216 @@ export default function Home() {
                   </CardContent>
                 </Card>
               </div>
+            ) : practiceMode === 'review' ? (
+              <ReviewMode
+                onSelectObjection={(objection) => {
+                  setCurrentObjection(objection);
+                  setHasStarted(true);
+                  setIsLoading(false);
+                }}
+              />
+            ) : practiceMode === 'voice' ? (
+              <div className="max-w-4xl mx-auto">
+                <VoicePracticeMode
+                  onSessionEnd={(session: VoiceSession) => {
+                    // Save voice session
+                    saveVoiceSession(session);
+                    
+                    // Award points for voice practice session
+                    try {
+                      addPoints(POINTS_VALUES.PRACTICE_SESSION, 'Completed voice practice session', {
+                        duration: session.metrics.totalDuration,
+                        messagesExchanged: session.metrics.messagesExchanged,
+                      });
+                    } catch (error) {
+                      console.error('Error adding points:', error);
+                    }
+                    
+                    // Show celebration if significant session
+                    if (session.metrics.messagesExchanged >= 10) {
+                      setCelebration({
+                        type: 'session',
+                        message: `Great job! You completed a ${Math.floor(session.metrics.totalDuration / 60)}-minute voice practice session with ${session.metrics.messagesExchanged} messages!`,
+                      });
+                    }
+                  }}
+                />
+              </div>
+            ) : practiceMode === 'learning-path' ? (
+              <LearningPaths
+                onSelectObjection={(objectionId) => {
+                  const objection = allObjections.find(o => o.id === objectionId);
+                  if (objection) {
+                    setCurrentObjection(objection);
+                    setHasStarted(true);
+                    setIsLoading(false);
+                  }
+                }}
+                onStartPath={(pathId) => {
+                  setSelectedLearningPath(pathId);
+                  const currentObjectionId = getCurrentPathObjection(pathId);
+                  if (currentObjectionId) {
+                    const objection = allObjections.find(o => o.id === currentObjectionId);
+                    if (objection) {
+                      setCurrentObjection(objection);
+                      setHasStarted(true);
+                      setIsLoading(false);
+                    }
+                  }
+                }}
+              />
+            ) : practiceMode === 'scenario' ? (
+              selectedScenario ? (
+                <ScenarioPractice
+                  scenario={practiceScenarios.find(s => s.id === selectedScenario)!}
+                  onComplete={() => {
+                    setSelectedScenario(null);
+                    setHasStarted(false);
+                  }}
+                  onExit={() => {
+                    setSelectedScenario(null);
+                    setHasStarted(false);
+                    setPracticeMode('random');
+                  }}
+                />
+              ) : (
+                <div className="max-w-5xl mx-auto">
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="text-2xl">Choose a Scenario</CardTitle>
+                      <CardDescription>
+                        Practice handling multiple objections in realistic call scenarios with full context
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* Difficulty Filter */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                            Filter by Difficulty
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant={scenarioDifficulty === 'all' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setScenarioDifficulty('all')}
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant={scenarioDifficulty === 'beginner' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setScenarioDifficulty('beginner')}
+                            >
+                              Beginner
+                            </Button>
+                            <Button
+                              variant={scenarioDifficulty === 'intermediate' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setScenarioDifficulty('intermediate')}
+                            >
+                              Intermediate
+                            </Button>
+                            <Button
+                              variant={scenarioDifficulty === 'advanced' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setScenarioDifficulty('advanced')}
+                            >
+                              Advanced
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Scenario List */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(scenarioDifficulty === 'all'
+                            ? practiceScenarios
+                            : getScenariosByDifficulty(scenarioDifficulty)
+                          ).map((scenario) => (
+                            <Card
+                              key={scenario.id}
+                              className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-teal-500"
+                              onClick={() => {
+                                setSelectedScenario(scenario.id);
+                                setHasStarted(true);
+                              }}
+                            >
+                              <CardHeader>
+                                <div className="flex items-start justify-between">
+                                  <CardTitle className="text-lg">{scenario.title}</CardTitle>
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    scenario.difficulty === 'beginner'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                      : scenario.difficulty === 'intermediate'
+                                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                      : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                  }`}>
+                                    {scenario.difficulty}
+                                  </span>
+                                </div>
+                                <CardDescription>{scenario.description}</CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="flex items-center justify-between">
+                                    <span>Objections:</span>
+                                    <span className="font-semibold">{scenario.objections.length}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>Estimated Duration:</span>
+                                    <span className="font-semibold">{scenario.estimatedDuration} min</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>Property:</span>
+                                    <span className="font-semibold">{scenario.property.address}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>Potential Profit:</span>
+                                    <span className="font-semibold text-green-600 dark:text-green-400">
+                                      ${(
+                                        scenario.property.arv -
+                                        scenario.property.purchasePrice -
+                                        scenario.property.repairEstimate
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            ) : practiceMode === 'spaced' && filteredObjections.length === 0 ? (
+              <div className="text-center">
+                <Card className="shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-3xl">No Reviews Due</CardTitle>
+                    <CardDescription className="text-lg">
+                      Great job! You're all caught up on your spaced repetition reviews.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Continue practicing objections to build your review schedule. The algorithm will automatically schedule reviews at optimal intervals based on your performance.
+                      </p>
+                      <div className="flex gap-4 justify-center">
+                        <Button
+                          onClick={() => setPracticeMode('random')}
+                          size="lg"
+                          className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xl px-8 py-6"
+                        >
+                          Practice Random Objections
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             ) : isLoading ? (
               <div>
                 <LoadingAnimation 
@@ -454,67 +921,76 @@ export default function Home() {
                 />
               </div>
             ) : currentObjection ? (
-              <div className="space-y-6">
-                {/* Challenge Mode Display */}
-                {practiceMode === 'challenge' && challengeConfig && (
-                  <ChallengeMode
-                    timeLimit={challengeConfig.timeLimit}
-                    goal={challengeConfig.goal}
-                    onComplete={(completed, timeUsed) => {
-                      setChallengeCompleted(completed);
-                      setChallengeTimeUsed(timeUsed);
-                      // End session after challenge
-                      setTimeout(() => {
-                        handleEndSession();
-                      }, 2000);
+              <SwipeablePracticeView
+                currentObjection={currentObjection}
+                challengeMode={practiceMode === 'challenge' && !!challengeConfig}
+                challengeConfig={challengeConfig}
+                onChallengeComplete={(completed, timeUsed) => {
+                  setChallengeCompleted(completed);
+                  setChallengeTimeUsed(timeUsed);
+                  setTimeout(() => {
+                    handleEndSession();
+                  }, 2000);
+                }}
+                onChallengeCancel={() => {
+                  setChallengeConfig(null);
+                  setPracticeMode('random');
+                }}
+                onAddResponse={handleAddResponse}
+                onRatingChange={handleRatingChange}
+                onUpvote={() => {
+                  const updated = getObjections();
+                  setAllObjections(prev => {
+                    // Only update if upvotes actually changed
+                    const changed = prev.some((p, i) => {
+                      const u = updated[i];
+                      if (!u || p.id !== u.id) return true;
+                      // Check if upvotes changed for any response
+                      const pResponses = [...p.customResponses, ...p.defaultResponses];
+                      const uResponses = [...u.customResponses, ...u.defaultResponses];
+                      return pResponses.some((pr, j) => {
+                        const ur = uResponses[j];
+                        return !ur || (pr.upvotes || 0) !== (ur.upvotes || 0);
+                      });
+                    });
+                    return changed ? updated : prev;
+                  });
+                  const updatedObj = updated.find(o => o.id === currentObjection.id);
+                  if (updatedObj) {
+                    setCurrentObjection(prev => {
+                      if (!prev || prev.id !== updatedObj.id) return updatedObj;
+                      // Check if upvotes changed
+                      const prevResponses = [...prev.customResponses, ...prev.defaultResponses];
+                      const newResponses = [...updatedObj.customResponses, ...updatedObj.defaultResponses];
+                      const upvotesChanged = prevResponses.some((pr, i) => {
+                        const nr = newResponses[i];
+                        return !nr || (pr.upvotes || 0) !== (nr.upvotes || 0);
+                      });
+                      return upvotesChanged ? updatedObj : prev;
+                    });
+                  }
+                }}
+                    onNextObjection={() => {
+                      // If in learning path mode, advance to next step
+                      if (selectedLearningPath && currentObjection) {
+                        completePathStep(selectedLearningPath, currentObjection.id);
+                        // Check if path is completed
+                        const { isPathCompleted } = require('@/lib/learningPaths');
+                        if (isPathCompleted(selectedLearningPath)) {
+                          alert('Congratulations! You completed the learning path!');
+                          setSelectedLearningPath(null);
+                          setPracticeMode('random');
+                        }
+                      }
+                      handleGetObjection();
                     }}
-                    onCancel={() => {
-                      setChallengeConfig(null);
-                      setPracticeMode('random');
-                    }}
-                  />
-                )}
-
-                <ObjectionCard
-                  objection={currentObjection}
-                  onAddResponse={handleAddResponse}
-                  onRatingChange={handleRatingChange}
-                  onUpvote={() => {
-                    const updated = getObjections();
-                    setAllObjections(updated);
-                    const updatedObj = updated.find(o => o.id === currentObjection.id);
-                    if (updatedObj) {
-                      setCurrentObjection(updatedObj);
-                    }
-                  }}
-                />
-                <div className="text-center space-y-4">
-                  <div className="flex gap-4 justify-center flex-wrap">
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleGetObjection}
-                        size="lg"
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xl px-8 py-6"
-                      >
-                        Get Next Objection
-                      </Button>
-                    </motion.div>
-                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={handleEndSession}
-                        size="lg"
-                        variant="outline"
-                        className="text-xl px-8 py-6"
-                      >
-                        End Session
-                      </Button>
-                    </motion.div>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    {sessionObjections.current.length} objection{sessionObjections.current.length !== 1 ? 's' : ''} practiced this session
-                  </p>
-                </div>
-              </div>
+                onEndSession={handleEndSession}
+                sessionCount={sessionObjections.current.length}
+                onObjectionCardRef={(ref) => {
+                  // Store ref in useRef to avoid state updates
+                  objectionCardRef.current = ref;
+                }}
+              />
             ) : null}
           </AnimatePresence>
         </div>
@@ -529,6 +1005,12 @@ export default function Home() {
           onComplete={() => setCelebration(null)}
         />
       )}
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutsHelp
+        isOpen={showShortcutsHelp}
+        onClose={() => setShowShortcutsHelp(false)}
+      />
     </div>
   );
 }

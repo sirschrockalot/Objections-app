@@ -1,4 +1,4 @@
-import { Objection, Response, ConfidenceRating, PracticeSession, ObjectionNote, ResponseTemplate } from '@/types';
+import { Objection, Response, ConfidenceRating, PracticeSession, ObjectionNote, ResponseTemplate, PracticeHistoryEntry, Comment, PointsEntry, UserLevel, CategoryMastery } from '@/types';
 import { initialObjections } from '@/data/objections';
 
 const STORAGE_KEY = 'objections-app-data';
@@ -6,6 +6,10 @@ const CONFIDENCE_RATINGS_KEY = 'objections-app-confidence-ratings';
 const PRACTICE_SESSIONS_KEY = 'objections-app-sessions';
 const NOTES_KEY = 'objections-app-notes';
 const TEMPLATES_KEY = 'objections-app-templates';
+const PRACTICE_HISTORY_KEY = 'objections-app-practice-history';
+const COMMENTS_KEY = 'objections-app-comments';
+const POINTS_KEY = 'objections-app-points';
+const USER_ID_KEY = 'objections-app-user-id';
 
 export function getObjections(): Objection[] {
   if (typeof window === 'undefined') {
@@ -455,5 +459,118 @@ export function getDefaultTemplate(): ResponseTemplate {
     nextStep: 'End with a clear next step or call to action',
     createdAt: new Date().toISOString(),
   };
+}
+
+// Practice History Functions
+export function recordPracticeHistory(objectionId: string, sessionId: string, confidenceRating?: number): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const history = getPracticeHistory();
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Find existing entry for today
+    const existingIndex = history.findIndex(
+      entry => entry.objectionId === objectionId && entry.date === today
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing entry
+      history[existingIndex].timesPracticed += 1;
+      if (confidenceRating) {
+        history[existingIndex].confidenceRating = confidenceRating;
+      }
+    } else {
+      // Create new entry
+      const allHistoryForObjection = history.filter(e => e.objectionId === objectionId);
+      const newEntry: PracticeHistoryEntry = {
+        objectionId,
+        date: today,
+        sessionId,
+        confidenceRating,
+        timesPracticed: allHistoryForObjection.length + 1,
+      };
+      history.push(newEntry);
+    }
+
+    localStorage.setItem(PRACTICE_HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Error recording practice history:', error);
+  }
+}
+
+export function getPracticeHistory(): PracticeHistoryEntry[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const stored = localStorage.getItem(PRACTICE_HISTORY_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error loading practice history:', error);
+    return [];
+  }
+}
+
+export function getObjectionPracticeHistory(objectionId: string): PracticeHistoryEntry[] {
+  const history = getPracticeHistory();
+  return history
+    .filter(entry => entry.objectionId === objectionId)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+export function getAllPracticedObjections(): string[] {
+  const history = getPracticeHistory();
+  const uniqueIds = new Set(history.map(entry => entry.objectionId));
+  return Array.from(uniqueIds);
+}
+
+export function getObjectionPracticeCount(objectionId: string): number {
+  const history = getPracticeHistory();
+  return history.filter(entry => entry.objectionId === objectionId).length;
+}
+
+export function getObjectionFirstPracticedDate(objectionId: string): string | null {
+  const history = getObjectionPracticeHistory(objectionId);
+  return history.length > 0 ? history[0].date : null;
+}
+
+export function getObjectionLastPracticedDate(objectionId: string): string | null {
+  const history = getObjectionPracticeHistory(objectionId);
+  return history.length > 0 ? history[history.length - 1].date : null;
+}
+
+export function getConfidenceImprovement(objectionId: string): { trend: 'improving' | 'declining' | 'stable'; average: number } | null {
+  const history = getObjectionPracticeHistory(objectionId);
+  const withRatings = history.filter(entry => entry.confidenceRating !== undefined);
+  
+  if (withRatings.length < 2) return null;
+
+  const ratings = withRatings.map(entry => entry.confidenceRating!);
+  const average = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+  
+  // Compare first half vs second half
+  const midpoint = Math.floor(ratings.length / 2);
+  const firstHalf = ratings.slice(0, midpoint);
+  const secondHalf = ratings.slice(midpoint);
+  
+  const firstAvg = firstHalf.reduce((sum, r) => sum + r, 0) / firstHalf.length;
+  const secondAvg = secondHalf.reduce((sum, r) => sum + r, 0) / secondHalf.length;
+  
+  let trend: 'improving' | 'declining' | 'stable' = 'stable';
+  if (secondAvg > firstAvg + 0.3) trend = 'improving';
+  else if (secondAvg < firstAvg - 0.3) trend = 'declining';
+
+  return { trend, average };
+}
+
+export function getPracticeHistoryByDateRange(startDate: string, endDate: string): PracticeHistoryEntry[] {
+  const history = getPracticeHistory();
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  
+  return history.filter(entry => {
+    const entryDate = new Date(entry.date).getTime();
+    return entryDate >= start && entryDate <= end;
+  });
 }
 

@@ -1,20 +1,30 @@
 'use client';
 
 import { Objection } from '@/types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getLatestConfidenceRating, saveConfidenceRating, upvoteResponse, isResponseUpvoted, getObjections, saveNote, getNote } from '@/lib/storage';
-import { Star, ThumbsUp, GitCompare, StickyNote, FileText } from 'lucide-react';
+import { addPoints, POINTS_VALUES } from '@/lib/gamification';
+import { Star, ThumbsUp, GitCompare, StickyNote, FileText, Mic, MicOff } from 'lucide-react';
 import ResponseComparison from './ResponseComparison';
 import ResponseTemplateBuilder from './ResponseTemplateBuilder';
+import CommentsSection from './CommentsSection';
+import ReviewDueBadge from './ReviewDueBadge';
+import { useSwipe } from '@/hooks/useSwipe';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface ObjectionCardProps {
   objection: Objection;
   onAddResponse: (objectionId: string, responseText: string) => void;
   onRatingChange?: () => void;
   onUpvote?: () => void;
+}
+
+export interface ObjectionCardRef {
+  revealResponses: () => void;
+  addResponse: () => void;
 }
 
 const categoryColors: Record<string, string> = {
@@ -26,7 +36,8 @@ const categoryColors: Record<string, string> = {
   'Interest': 'bg-orange-100 text-orange-800 border-orange-300',
 };
 
-export default function ObjectionCard({ objection, onAddResponse, onRatingChange, onUpvote }: ObjectionCardProps) {
+const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
+  ({ objection, onAddResponse, onRatingChange, onUpvote }, ref) => {
   const [showResponses, setShowResponses] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newResponse, setNewResponse] = useState('');
@@ -37,6 +48,53 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
   const [showNotes, setShowNotes] = useState(false);
   const [note, setNote] = useState(objection.personalNote || '');
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
+  const [showResponsesViaSwipe, setShowResponsesViaSwipe] = useState(false);
+
+  // Voice input for responses
+  const {
+    isListening: isVoiceListening,
+    transcript: voiceTranscript,
+    isSupported: isVoiceSupported,
+    toggleListening: toggleVoiceListening,
+    stopListening: stopVoiceListening,
+  } = useVoiceInput({
+    onResult: (text) => {
+      setNewResponse(prev => prev + (prev ? ' ' : '') + text);
+    },
+    continuous: true,
+  });
+
+  // Swipe gestures
+  const swipeHandlers = useSwipe({
+    onSwipeUp: () => {
+      if (!showResponses) {
+        setShowResponses(true);
+        setShowResponsesViaSwipe(true);
+      }
+    },
+    onSwipeDown: () => {
+      if (showResponses && showResponsesViaSwipe) {
+        setShowResponses(false);
+        setShowResponsesViaSwipe(false);
+      }
+    },
+  });
+
+  // Expose methods for keyboard shortcuts
+  // Use useCallback to create stable function references
+  const revealResponsesHandler = useCallback(() => {
+    setShowResponses(prev => !prev);
+  }, []);
+
+  const addResponseHandler = useCallback(() => {
+    setShowAddForm(prev => !prev);
+    setShowResponses(true);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    revealResponses: revealResponsesHandler,
+    addResponse: addResponseHandler,
+  }), [revealResponsesHandler, addResponseHandler]);
 
   // Sort responses: custom responses by upvotes (desc), then default responses
   const sortedResponses = [...objection.customResponses]
@@ -72,6 +130,27 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
   const handleRatingClick = (rating: number) => {
     saveConfidenceRating(objection.id, rating);
     setConfidenceRating(rating);
+    
+    // Award points based on confidence rating
+    try {
+      let points = 0;
+      if (rating === 5) {
+        points = POINTS_VALUES.CONFIDENCE_RATING_5;
+      } else if (rating === 4) {
+        points = POINTS_VALUES.CONFIDENCE_RATING_4;
+      } else if (rating === 3) {
+        points = POINTS_VALUES.CONFIDENCE_RATING_3;
+      }
+      if (points > 0) {
+        addPoints(points, `Confidence rating: ${rating}/5`, {
+          objectionId: objection.id,
+          rating,
+        });
+      }
+    } catch (error) {
+      console.error('Error adding points:', error);
+    }
+    
     if (onRatingChange) {
       onRatingChange();
     }
@@ -99,6 +178,8 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
+      {...swipeHandlers}
+      className="touch-pan-y"
     >
       <Card className="max-w-4xl w-full mx-auto shadow-xl">
         <CardHeader>
@@ -114,6 +195,7 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
                   {objection.difficulty}
                 </span>
               )}
+              <ReviewDueBadge objectionId={objection.id} />
             </div>
           </div>
           <CardTitle className="text-3xl mb-4">Objection</CardTitle>
@@ -163,7 +245,7 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
                 onClick={() => setShowResponses(!showResponses)}
                 variant="default"
                 size="lg"
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-blue-600 hover:bg-blue-700 min-h-[48px] text-base"
               >
                 {showResponses ? 'Hide' : 'Show'} Responses ({sortedResponses.length})
               </Button>
@@ -176,22 +258,29 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
                 }}
                 variant="default"
                 size="lg"
-                className="w-full bg-green-600 hover:bg-green-700"
+                className="w-full bg-green-600 hover:bg-green-700 min-h-[48px] text-base"
               >
                 {showAddForm ? 'Cancel' : 'Add'} Your Response
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
               <Button
                 onClick={() => setShowNotes(!showNotes)}
                 variant="outline"
                 size="lg"
-                className="w-full"
+                className="w-full min-h-[48px] text-base"
               >
                 <StickyNote className="w-4 h-4 mr-2" />
                 {showNotes ? 'Hide' : 'Notes'}
               </Button>
             </motion.div>
+          </div>
+          
+          {/* Mobile Swipe Hint */}
+          <div className="sm:hidden text-center mb-4">
+            <p className="text-xs text-gray-500">
+              💡 Swipe up to reveal responses, swipe down to hide
+            </p>
           </div>
 
           {/* Notes Section */}
@@ -231,13 +320,50 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
                 onSubmit={handleSubmit}
                 className="mb-6 p-4 bg-gray-50 rounded-lg overflow-hidden"
               >
-                <textarea
-                  value={newResponse}
-                  onChange={(e) => setNewResponse(e.target.value)}
-                  placeholder="Enter your response to this objection..."
-                  className="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-                  rows={4}
-                />
+                <div className="space-y-2">
+                  <textarea
+                    value={newResponse}
+                    onChange={(e) => setNewResponse(e.target.value)}
+                    placeholder="Enter your response to this objection..."
+                    className="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none text-base"
+                    rows={4}
+                  />
+                  {isVoiceSupported && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant={isVoiceListening ? "default" : "outline"}
+                        size="sm"
+                        onClick={toggleVoiceListening}
+                        className={`flex items-center gap-2 ${
+                          isVoiceListening ? 'bg-red-600 hover:bg-red-700' : ''
+                        }`}
+                      >
+                        {isVoiceListening ? (
+                          <>
+                            <MicOff className="w-4 h-4" />
+                            Stop Recording
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="w-4 h-4" />
+                            Voice Input
+                          </>
+                        )}
+                      </Button>
+                      {isVoiceListening && (
+                        <span className="text-xs text-gray-600 animate-pulse">
+                          Listening...
+                        </span>
+                      )}
+                      {voiceTranscript && (
+                        <span className="text-xs text-gray-500 italic">
+                          "{voiceTranscript}"
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
@@ -345,7 +471,11 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-700 leading-relaxed">{response.text}</p>
+                        <p className="text-gray-700 dark:text-gray-300 leading-relaxed mb-3">{response.text}</p>
+                        <CommentsSection
+                          responseId={response.id}
+                          objectionId={objection.id}
+                        />
                       </motion.div>
                     );
                   })
@@ -387,4 +517,8 @@ export default function ObjectionCard({ objection, onAddResponse, onRatingChange
       )}
     </motion.div>
   );
-}
+});
+
+ObjectionCard.displayName = 'ObjectionCard';
+
+export default ObjectionCard;
