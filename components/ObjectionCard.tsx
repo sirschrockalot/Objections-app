@@ -181,25 +181,31 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
       {...swipeHandlers}
       className="touch-pan-y"
     >
-      <Card className="max-w-4xl w-full mx-auto shadow-xl">
+      <Card className="max-w-4xl w-full mx-auto shadow-xl" role="article" aria-labelledby="objection-title">
         <CardHeader>
           <div className="flex items-start justify-between mb-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                categoryColors[objection.category] || 'bg-gray-100 text-gray-800 border-gray-300'
-              }`}>
+            <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Objection metadata">
+              <span 
+                className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                  categoryColors[objection.category] || 'bg-gray-100 text-gray-800 border-gray-300'
+                }`}
+                aria-label={`Category: ${objection.category}`}
+              >
                 {objection.category}
               </span>
               {objection.difficulty && (
-                <span className="text-xs font-medium px-2 py-1 rounded bg-gray-200 text-gray-700">
+                <span 
+                  className="text-xs font-medium px-2 py-1 rounded bg-gray-200 text-gray-700"
+                  aria-label={`Difficulty: ${objection.difficulty}`}
+                >
                   {objection.difficulty}
                 </span>
               )}
               <ReviewDueBadge objectionId={objection.id} />
             </div>
           </div>
-          <CardTitle className="text-3xl mb-4">Objection</CardTitle>
-          <CardDescription className="text-xl text-gray-700 leading-relaxed">
+          <CardTitle id="objection-title" className="text-3xl mb-4">Objection</CardTitle>
+          <CardDescription className="text-xl text-gray-700 leading-relaxed" aria-label="Objection text">
             {objection.text}
           </CardDescription>
         </CardHeader>
@@ -247,6 +253,8 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
                 size="lg"
                 className="w-full bg-blue-600 hover:bg-blue-700 min-h-[48px] text-base"
                 data-onboarding="show-responses"
+                aria-label={showResponses ? `Hide ${sortedResponses.length} responses` : `Show ${sortedResponses.length} responses`}
+                aria-expanded={showResponses}
               >
                 {showResponses ? 'Hide' : 'Show'} Responses ({sortedResponses.length})
               </Button>
@@ -261,6 +269,8 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
                 size="lg"
                 className="w-full bg-green-600 hover:bg-green-700 min-h-[48px] text-base"
                 data-onboarding="add-response"
+                aria-label={showAddForm ? 'Cancel adding response' : 'Add your response to this objection'}
+                aria-expanded={showAddForm}
               >
                 {showAddForm ? 'Cancel' : 'Add'} Your Response
               </Button>

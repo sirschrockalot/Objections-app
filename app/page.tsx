@@ -407,6 +407,8 @@ export default function Home() {
                 variant="outline"
                 className="mb-4"
                 data-onboarding="stats-dashboard"
+                aria-label={showStats ? 'Hide statistics dashboard' : 'Show statistics dashboard'}
+                aria-expanded={showStats}
               >
                 {showStats ? 'Hide' : 'Show'} Stats Dashboard
               </Button>

@@ -47,8 +47,6 @@ export function saveCustomResponse(objectionId: string, response: Response): voi
   if (typeof window === 'undefined') return;
 
   try {
-
-  try {
     const stored = localStorage.getItem(STORAGE_KEY);
     let objections: Objection[] = stored ? JSON.parse(stored) : [];
 
@@ -78,6 +76,10 @@ export function saveCustomResponse(objectionId: string, response: Response): voi
     localStorage.setItem(STORAGE_KEY, JSON.stringify(objections));
   } catch (error) {
     console.error('Error saving custom response:', error);
+    // Re-throw to allow error recovery dialog to handle it
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw error;
+    }
   }
 }
 
