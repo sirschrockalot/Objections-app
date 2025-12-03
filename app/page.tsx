@@ -562,6 +562,7 @@ export default function Home() {
                         onClick={() => {
                           setPracticeMode('voice');
                           setChallengeConfig(null);
+                          setHasStarted(true); // Start the voice practice mode
                         }}
                       >
                         <Mic className="w-6 h-6" />
