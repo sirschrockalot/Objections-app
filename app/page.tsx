@@ -37,6 +37,7 @@ import { VoiceSession } from '@/types';
 import { Search, Filter, X, Keyboard, Mic } from 'lucide-react';
 import OnboardingTour from '@/components/OnboardingTour';
 import { getMainAppOnboardingSteps } from '@/lib/onboarding';
+import WelcomeScreen from '@/components/WelcomeScreen';
 
 type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
@@ -62,6 +63,7 @@ export default function Home() {
   const [showReviewMode, setShowReviewMode] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [scenarioDifficulty, setScenarioDifficulty] = useState<'beginner' | 'intermediate' | 'advanced' | 'all'>('all');
   const [selectedLearningPath, setSelectedLearningPath] = useState<string | null>(null);
@@ -78,13 +80,13 @@ export default function Home() {
       initialAchievements.filter(a => a.unlocked).map(a => a.id)
     );
     
-    // Check if onboarding should be shown
+    // Check if welcome screen should be shown
     import('@/lib/onboarding').then(({ isOnboardingCompleted }) => {
       if (!isOnboardingCompleted()) {
-        // Small delay to ensure DOM is ready
+        // Show welcome screen first, then onboarding tour
         setTimeout(() => {
-          setShowOnboarding(true);
-        }, 500);
+          setShowWelcome(true);
+        }, 300);
       }
     });
   }, []);
@@ -1025,6 +1027,27 @@ export default function Home() {
         isOpen={showShortcutsHelp}
         onClose={() => setShowShortcutsHelp(false)}
       />
+
+      {/* Welcome Screen */}
+      {showWelcome && (
+        <WelcomeScreen
+          onDismiss={() => {
+            setShowWelcome(false);
+            // Show onboarding tour after welcome screen
+            setTimeout(() => {
+              setShowOnboarding(true);
+            }, 500);
+          }}
+          onStartPractice={() => {
+            setShowWelcome(false);
+            handleGetObjection();
+            // Show onboarding tour after starting practice
+            setTimeout(() => {
+              setShowOnboarding(true);
+            }, 1000);
+          }}
+        />
+      )}
 
       {/* Onboarding Tour */}
       {showOnboarding && (
