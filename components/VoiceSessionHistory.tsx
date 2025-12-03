@@ -21,10 +21,12 @@ import {
   FileText,
   FileJson,
   FileSpreadsheet,
-  Sparkles
+  Sparkles,
+  BarChart3
 } from 'lucide-react';
 import ConversationTranscript from './ConversationTranscript';
 import PostSessionFeedback from './PostSessionFeedback';
+import VoiceSessionComparison from './VoiceSessionComparison';
 import {
   exportVoiceSessionJSON,
   exportVoiceSessionTXT,
@@ -42,6 +44,8 @@ export default function VoiceSessionHistory() {
   const [showExportMenu, setShowExportMenu] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [selectedSessionsForComparison, setSelectedSessionsForComparison] = useState<Set<string>>(new Set());
+  const [showComparison, setShowComparison] = useState(false);
 
   useEffect(() => {
     loadSessions();
@@ -191,6 +195,17 @@ export default function VoiceSessionHistory() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              {selectedSessionsForComparison.size >= 2 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowComparison(true)}
+                  className="flex items-center gap-2"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Compare ({selectedSessionsForComparison.size})
+                </Button>
+              )}
               {sessions.length > 0 && (
                 <div className="relative">
                   <Button
@@ -279,6 +294,22 @@ export default function VoiceSessionHistory() {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newSet = new Set(selectedSessionsForComparison);
+                          if (newSet.has(session.id)) {
+                            newSet.delete(session.id);
+                          } else {
+                            newSet.add(session.id);
+                          }
+                          setSelectedSessionsForComparison(newSet);
+                        }}
+                        className={selectedSessionsForComparison.has(session.id) ? 'bg-blue-100 dark:bg-blue-900/30' : ''}
+                      >
+                        {selectedSessionsForComparison.has(session.id) ? '✓ Selected' : 'Select'}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -488,6 +519,53 @@ export default function VoiceSessionHistory() {
                     onClose={() => setShowFeedback(false)}
                   />
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Comparison Modal */}
+      <AnimatePresence>
+        {showComparison && selectedSessionsForComparison.size >= 2 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setShowComparison(false);
+              setSelectedSessionsForComparison(new Set());
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b flex items-center justify-between">
+                <h2 className="text-xl font-bold">Session Comparison</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setShowComparison(false);
+                    setSelectedSessionsForComparison(new Set());
+                  }}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">
+                <VoiceSessionComparison
+                  sessions={sessions.filter((s) => selectedSessionsForComparison.has(s.id))}
+                  onClose={() => {
+                    setShowComparison(false);
+                    setSelectedSessionsForComparison(new Set());
+                  }}
+                />
               </div>
             </motion.div>
           </motion.div>
