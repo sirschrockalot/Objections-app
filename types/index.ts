@@ -273,3 +273,44 @@ export interface VoiceAgentState {
   connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
 }
 
+// AI Feedback Types
+export interface AIFeedback {
+  sessionId: string;
+  overallScore: number; // 0-100
+  strengths: string[];
+  improvementAreas: string[];
+  recommendations: AIRecommendation[];
+  qualityMetrics: QualityMetrics;
+  responseAnalysis: ResponseAnalysis[];
+  generatedAt: string;
+  model?: string; // AI model used
+}
+
+export interface QualityMetrics {
+  clarity: number; // 0-100
+  empathy: number; // 0-100
+  structure: number; // 0-100
+  objectionHandling: number; // 0-100
+  closingTechnique: number; // 0-100
+  averageResponseTime: number; // seconds
+}
+
+export interface AIRecommendation {
+  type: 'technique' | 'objection' | 'practice' | 'general';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  actionItems: string[];
+}
+
+export interface ResponseAnalysis {
+  messageId: string;
+  userMessage: string;
+  agentMessage: string; // The objection/context
+  score: number; // 0-100
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  suggestedResponse?: string;
+}
+

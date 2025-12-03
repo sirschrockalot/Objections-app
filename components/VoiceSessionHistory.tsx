@@ -20,9 +20,11 @@ import {
   Share2,
   FileText,
   FileJson,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Sparkles
 } from 'lucide-react';
 import ConversationTranscript from './ConversationTranscript';
+import PostSessionFeedback from './PostSessionFeedback';
 import {
   exportVoiceSessionJSON,
   exportVoiceSessionTXT,
@@ -39,6 +41,7 @@ export default function VoiceSessionHistory() {
   const [sortBy, setSortBy] = useState<'date' | 'duration' | 'messages'>('date');
   const [showExportMenu, setShowExportMenu] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   useEffect(() => {
     loadSessions();
@@ -429,28 +432,62 @@ export default function VoiceSessionHistory() {
                 </div>
               </div>
               <div className="p-6 overflow-y-auto flex-1">
-                <div className="mb-4 grid grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Duration</p>
-                    <p className="text-lg font-bold">
-                      {formatDuration(selectedSession.metrics.totalDuration)}
-                    </p>
-                  </div>
-                  <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Messages</p>
-                    <p className="text-lg font-bold">
-                      {selectedSession.metrics.messagesExchanged}
-                    </p>
-                  </div>
-                  <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
-                    <p className="text-lg font-bold capitalize">{selectedSession.status}</p>
-                  </div>
+                {/* Tabs */}
+                <div className="flex gap-2 mb-4 border-b">
+                  <button
+                    onClick={() => setShowFeedback(false)}
+                    className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+                      !showFeedback
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    Transcript
+                  </button>
+                  <button
+                    onClick={() => setShowFeedback(true)}
+                    className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+                      showFeedback
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI Feedback
+                  </button>
                 </div>
-                <div>
-                  <h3 className="font-semibold mb-3">Conversation Transcript</h3>
-                  <ConversationTranscript messages={selectedSession.messages} />
-                </div>
+
+                {!showFeedback ? (
+                  <>
+                    <div className="mb-4 grid grid-cols-3 gap-4">
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Duration</p>
+                        <p className="text-lg font-bold">
+                          {formatDuration(selectedSession.metrics.totalDuration)}
+                        </p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Messages</p>
+                        <p className="text-lg font-bold">
+                          {selectedSession.metrics.messagesExchanged}
+                        </p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
+                        <p className="text-lg font-bold capitalize">{selectedSession.status}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-3">Conversation Transcript</h3>
+                      <ConversationTranscript messages={selectedSession.messages} />
+                    </div>
+                  </>
+                ) : (
+                  <PostSessionFeedback
+                    session={selectedSession}
+                    onClose={() => setShowFeedback(false)}
+                  />
+                )}
               </div>
             </motion.div>
           </motion.div>
