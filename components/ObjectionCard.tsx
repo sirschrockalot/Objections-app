@@ -246,6 +246,7 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
                 variant="default"
                 size="lg"
                 className="w-full bg-blue-600 hover:bg-blue-700 min-h-[48px] text-base"
+                data-onboarding="show-responses"
               >
                 {showResponses ? 'Hide' : 'Show'} Responses ({sortedResponses.length})
               </Button>
@@ -259,6 +260,7 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
                 variant="default"
                 size="lg"
                 className="w-full bg-green-600 hover:bg-green-700 min-h-[48px] text-base"
+                data-onboarding="add-response"
               >
                 {showAddForm ? 'Cancel' : 'Add'} Your Response
               </Button>

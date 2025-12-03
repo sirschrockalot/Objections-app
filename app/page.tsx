@@ -35,6 +35,8 @@ import VoicePracticeMode from '@/components/VoicePracticeMode';
 import { saveVoiceSession } from '@/lib/voiceSessionStorage';
 import { VoiceSession } from '@/types';
 import { Search, Filter, X, Keyboard, Mic } from 'lucide-react';
+import OnboardingTour from '@/components/OnboardingTour';
+import { getMainAppOnboardingSteps } from '@/lib/onboarding';
 
 type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
@@ -59,6 +61,7 @@ export default function Home() {
   const [challengeTimeUsed, setChallengeTimeUsed] = useState(0);
   const [showReviewMode, setShowReviewMode] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [scenarioDifficulty, setScenarioDifficulty] = useState<'beginner' | 'intermediate' | 'advanced' | 'all'>('all');
   const [selectedLearningPath, setSelectedLearningPath] = useState<string | null>(null);
@@ -74,6 +77,16 @@ export default function Home() {
     previousAchievements.current = new Set(
       initialAchievements.filter(a => a.unlocked).map(a => a.id)
     );
+    
+    // Check if onboarding should be shown
+    import('@/lib/onboarding').then(({ isOnboardingCompleted }) => {
+      if (!isOnboardingCompleted()) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          setShowOnboarding(true);
+        }, 500);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -391,6 +404,7 @@ export default function Home() {
                 onClick={() => setShowStats(!showStats)}
                 variant="outline"
                 className="mb-4"
+                data-onboarding="stats-dashboard"
               >
                 {showStats ? 'Hide' : 'Show'} Stats Dashboard
               </Button>
@@ -696,6 +710,7 @@ export default function Home() {
                         onClick={handleGetObjection}
                         size="lg"
                         className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xl px-8 py-6"
+                        data-onboarding="start-practice"
                       >
                         Start Practice Session
                       </Button>
@@ -1010,6 +1025,16 @@ export default function Home() {
         isOpen={showShortcutsHelp}
         onClose={() => setShowShortcutsHelp(false)}
       />
+
+      {/* Onboarding Tour */}
+      {showOnboarding && (
+        <OnboardingTour
+          steps={getMainAppOnboardingSteps()}
+          onComplete={() => setShowOnboarding(false)}
+          onDismiss={() => setShowOnboarding(false)}
+          showSkip={true}
+        />
+      )}
     </div>
   );
 }
