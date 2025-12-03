@@ -5,6 +5,7 @@
 import { VoiceSession } from '@/types';
 
 const VOICE_SESSIONS_KEY = 'response-ready-voice-sessions';
+const ACTIVE_SESSION_KEY = 'response-ready-active-voice-session';
 
 /**
  * Save a voice session
@@ -24,7 +25,12 @@ export function saveVoiceSession(session: VoiceSession): void {
 
     localStorage.setItem(VOICE_SESSIONS_KEY, JSON.stringify(sessions));
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.error('Storage quota exceeded when saving voice session');
+      throw new Error('Storage quota exceeded. Please free up space or export your data.');
+    }
     console.error('Error saving voice session:', error);
+    throw error;
   }
 }
 
@@ -105,5 +111,65 @@ export function getVoiceSessionStats(): {
     lastSessionDate:
       sortedSessions.length > 0 ? sortedSessions[0].startTime : null,
   };
+}
+
+/**
+ * Save active session for recovery (auto-save)
+ */
+export function saveActiveSession(session: VoiceSession): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const sessionWithSaveTime = {
+      ...session,
+      lastSavedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(sessionWithSaveTime));
+  } catch (error) {
+    console.error('Error saving active session:', error);
+  }
+}
+
+/**
+ * Get active session for recovery
+ */
+export function getActiveSession(): VoiceSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = localStorage.getItem(ACTIVE_SESSION_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as VoiceSession;
+  } catch (error) {
+    console.error('Error loading active session:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear active session (after completion or intentional end)
+ */
+export function clearActiveSession(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(ACTIVE_SESSION_KEY);
+}
+
+/**
+ * Check if there's a recoverable session
+ */
+export function hasRecoverableSession(): boolean {
+  const activeSession = getActiveSession();
+  if (!activeSession) return false;
+  
+  // Session is recoverable if it's active or paused and less than 1 hour old
+  if (activeSession.status === 'active' || activeSession.status === 'paused') {
+    const lastSaved = activeSession.lastSavedAt 
+      ? new Date(activeSession.lastSavedAt).getTime()
+      : new Date(activeSession.startTime).getTime();
+    const age = Date.now() - lastSaved;
+    return age < 60 * 60 * 1000; // 1 hour
+  }
+  
+  return false;
 }
 

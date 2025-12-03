@@ -46,6 +46,19 @@ export function getObjections(): Objection[] {
 export function saveCustomResponse(objectionId: string, response: Response): void {
   if (typeof window === 'undefined') return;
 
+  // Check storage quota before saving
+  try {
+    const testSize = JSON.stringify(response).length * 2; // UTF-16 encoding estimate
+    const testKey = `__quota_test_${Date.now()}`;
+    localStorage.setItem(testKey, 'x'.repeat(Math.min(testSize, 1000))); // Test with small size
+    localStorage.removeItem(testKey);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw new Error('Storage quota exceeded. Please free up space or export your data.');
+    }
+    throw error;
+  }
+
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     let objections: Objection[] = stored ? JSON.parse(stored) : [];

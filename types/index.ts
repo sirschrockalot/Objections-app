@@ -250,7 +250,13 @@ export interface VoiceSession {
   objectionsPresented: string[]; // Objection IDs
   userResponses: string[]; // Response IDs or text
   metrics: VoiceSessionMetrics;
-  status: 'active' | 'paused' | 'completed' | 'error';
+  status: 'active' | 'paused' | 'completed' | 'error' | 'recovered';
+  lastSavedAt?: string; // Timestamp of last auto-save
+  recoveryData?: {
+    disconnectedAt: string;
+    reconnectedAt?: string;
+    messagesBeforeDisconnect: number;
+  };
 }
 
 export interface ElevenLabsAgentConfig {
@@ -312,5 +318,48 @@ export interface ResponseAnalysis {
   strengths: string[];
   improvements: string[];
   suggestedResponse?: string;
+}
+
+// Voice Practice Goals Types
+export interface VoicePracticeGoal {
+  id: string;
+  type: 'overallScore' | 'qualityMetric' | 'sessionFrequency' | 'sessionDuration' | 'consistency';
+  target: number; // Target value
+  current: number; // Current progress
+  metric?: string; // For qualityMetric type (e.g., 'clarity', 'empathy')
+  period?: 'daily' | 'weekly' | 'monthly' | 'allTime'; // For frequency/duration goals
+  deadline?: string; // ISO date string, optional
+  createdAt: string;
+  completedAt?: string;
+  isActive: boolean;
+  description?: string;
+}
+
+export interface GoalProgress {
+  goalId: string;
+  progress: number; // 0-100 percentage
+  current: number;
+  target: number;
+  remaining: number;
+  daysRemaining?: number;
+  isCompleted: boolean;
+  completedAt?: string;
+}
+
+// Audio Recording Types
+export interface SessionAudioRecording {
+  sessionId: string;
+  audioBlob: Blob;
+  duration: number; // seconds
+  recordedAt: string;
+  format: string; // e.g., 'audio/webm', 'audio/mp4'
+}
+
+export interface AudioPlaybackState {
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  playbackRate: number;
+  volume: number;
 }
 

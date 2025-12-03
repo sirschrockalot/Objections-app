@@ -15,6 +15,8 @@ export class AudioCapture {
   private audioContext: AudioContext | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private fullRecordingChunks: Blob[] = []; // For full session recording
+  private recordingStartTime: number | null = null;
 
   async startCapture(
     onAudioData: (audioBlob: Blob) => void,
@@ -44,10 +46,13 @@ export class AudioCapture {
       });
 
       this.chunks = [];
+      this.fullRecordingChunks = [];
+      this.recordingStartTime = Date.now();
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.chunks.push(event.data);
+          this.fullRecordingChunks.push(event.data); // Also save for full recording
           const blob = new Blob(this.chunks, { type: mimeType });
           onAudioData(blob);
         }
@@ -65,7 +70,32 @@ export class AudioCapture {
     }
   }
 
-  stopCapture(): void {
+  /**
+   * Get the full recording as a Blob
+   */
+  getFullRecording(): Blob | null {
+    if (this.fullRecordingChunks.length === 0) return null;
+    
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/mp4')
+      ? 'audio/mp4'
+      : 'audio/ogg';
+    
+    return new Blob(this.fullRecordingChunks, { type: mimeType });
+  }
+
+  /**
+   * Get recording duration in seconds
+   */
+  getRecordingDuration(): number {
+    if (!this.recordingStartTime) return 0;
+    return (Date.now() - this.recordingStartTime) / 1000;
+  }
+
+  stopCapture(): Blob | null {
+    const fullRecording = this.getFullRecording();
+    
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
     }
@@ -77,6 +107,10 @@ export class AudioCapture {
 
     this.mediaRecorder = null;
     this.chunks = [];
+    this.fullRecordingChunks = [];
+    this.recordingStartTime = null;
+
+    return fullRecording;
   }
 
   isCapturing(): boolean {

@@ -24,6 +24,8 @@ import ResponseTechniques from './ResponseTechniques';
 import LearningPaths from './LearningPaths';
 import VoiceSessionHistory from './VoiceSessionHistory';
 import VoiceSessionAnalytics from './VoiceSessionAnalytics';
+import VoicePracticeGoals from './VoicePracticeGoals';
+import StorageQuotaWarning from './StorageQuotaWarning';
 
 interface StatsDashboardProps {
   onSelectObjection?: (objectionId: string) => void;
@@ -258,6 +260,12 @@ export default function StatsDashboard({ onSelectObjection }: StatsDashboardProp
 
       {/* Learning Paths */}
       <LearningPaths onSelectObjection={onSelectObjection} />
+
+      {/* Storage Quota Warning */}
+      <StorageQuotaWarning autoCheck={true} showDetails={false} />
+
+      {/* Voice Practice Goals */}
+      <VoicePracticeGoals />
 
       {/* Voice Session Analytics */}
       <VoiceSessionAnalytics />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { VoiceSession } from '@/types';
 import { getVoiceSessions, getVoiceSessionStats, deleteVoiceSession } from '@/lib/voiceSessionStorage';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,11 +22,13 @@ import {
   FileJson,
   FileSpreadsheet,
   Sparkles,
-  BarChart3
+  BarChart3,
+  Volume2,
 } from 'lucide-react';
 import ConversationTranscript from './ConversationTranscript';
 import PostSessionFeedback from './PostSessionFeedback';
 import VoiceSessionComparison from './VoiceSessionComparison';
+import SessionAudioPlayer, { SessionAudioPlayerRef } from './SessionAudioPlayer';
 import {
   exportVoiceSessionJSON,
   exportVoiceSessionTXT,
@@ -44,8 +46,11 @@ export default function VoiceSessionHistory() {
   const [showExportMenu, setShowExportMenu] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showAudio, setShowAudio] = useState(false);
   const [selectedSessionsForComparison, setSelectedSessionsForComparison] = useState<Set<string>>(new Set());
   const [showComparison, setShowComparison] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const audioPlayerRef = useRef<SessionAudioPlayerRef | null>(null);
 
   useEffect(() => {
     loadSessions();
@@ -466,9 +471,12 @@ export default function VoiceSessionHistory() {
                 {/* Tabs */}
                 <div className="flex gap-2 mb-4 border-b">
                   <button
-                    onClick={() => setShowFeedback(false)}
+                    onClick={() => {
+                      setShowFeedback(false);
+                      setShowAudio(false);
+                    }}
                     className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                      !showFeedback
+                      !showFeedback && !showAudio
                         ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                         : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                     }`}
@@ -476,7 +484,24 @@ export default function VoiceSessionHistory() {
                     Transcript
                   </button>
                   <button
-                    onClick={() => setShowFeedback(true)}
+                    onClick={() => {
+                      setShowAudio(true);
+                      setShowFeedback(false);
+                    }}
+                    className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+                      showAudio
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  >
+                    <Volume2 className="w-4 h-4" />
+                    Audio
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowFeedback(true);
+                      setShowAudio(false);
+                    }}
                     className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
                       showFeedback
                         ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -488,7 +513,42 @@ export default function VoiceSessionHistory() {
                   </button>
                 </div>
 
-                {!showFeedback ? (
+                {showAudio ? (
+                  <div className="space-y-4">
+                    <SessionAudioPlayer
+                      ref={audioPlayerRef}
+                      session={selectedSession}
+                      messages={selectedSession.messages}
+                      onTimeUpdate={setAudioCurrentTime}
+                      onSeek={(time) => {
+                        setAudioCurrentTime(time);
+                      }}
+                    />
+                    <div className="mt-4">
+                      <h3 className="font-semibold mb-3">Transcript (synced with audio)</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        Click on any message to jump to that point in the audio
+                      </p>
+                      <ConversationTranscript
+                        messages={selectedSession.messages}
+                        highlightTime={audioCurrentTime}
+                        session={selectedSession}
+                        onMessageClick={(timestamp) => {
+                          // Seek to the timestamp using the audio player ref
+                          if (audioPlayerRef.current) {
+                            audioPlayerRef.current.seek(timestamp);
+                            setAudioCurrentTime(timestamp);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : showFeedback ? (
+                  <PostSessionFeedback
+                    session={selectedSession}
+                    onClose={() => setShowFeedback(false)}
+                  />
+                ) : (
                   <>
                     <div className="mb-4 grid grid-cols-3 gap-4">
                       <div className="text-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
@@ -513,11 +573,6 @@ export default function VoiceSessionHistory() {
                       <ConversationTranscript messages={selectedSession.messages} />
                     </div>
                   </>
-                ) : (
-                  <PostSessionFeedback
-                    session={selectedSession}
-                    onClose={() => setShowFeedback(false)}
-                  />
                 )}
               </div>
             </motion.div>

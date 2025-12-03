@@ -18,10 +18,11 @@ interface UseElevenLabsAgentOptions {
   onSessionStart?: (session: VoiceSession) => void;
   onSessionEnd?: (session: VoiceSession) => void;
   autoConnect?: boolean;
+  recoverSession?: VoiceSession; // Optional session to recover
 }
 
 export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
-  const { config, scenarioContext, onSessionStart, onSessionEnd, autoConnect = false } = options;
+  const { config, scenarioContext, onSessionStart, onSessionEnd, autoConnect = false, recoverSession } = options;
 
   // State
   const [state, setState] = useState<VoiceAgentState>({
@@ -35,6 +36,7 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
 
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [currentSession, setCurrentSession] = useState<VoiceSession | null>(null);
+  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs
   const clientRef = useRef<ElevenLabsClient | null>(null);
@@ -114,9 +116,14 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
       }
     }
 
-    // Auto-connect if enabled
-    if (autoConnect && !state.isConnected) {
+    // Auto-connect if enabled or recovering session
+    if ((autoConnect || recoverSession) && !state.isConnected) {
       connect();
+    }
+
+    // Recover session if provided
+    if (recoverSession && !currentSession) {
+      startSession(recoverSession);
     }
 
     return () => {
@@ -155,8 +162,8 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
   }, [currentSession]);
 
   // Start a new voice session
-  const startSession = useCallback(() => {
-    const session: VoiceSession = {
+  const startSession = useCallback((recoveredSession?: VoiceSession) => {
+    const session: VoiceSession = recoveredSession || {
       id: `session-${Date.now()}`,
       startTime: new Date().toISOString(),
       messages: [],
@@ -171,11 +178,67 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
       status: 'active',
     };
 
+    // If recovering, restore messages and adjust start time
+    if (recoveredSession) {
+      setMessages(recoveredSession.messages);
+      sessionStartTimeRef.current = new Date(recoveredSession.startTime).getTime();
+      session.status = 'active';
+      session.recoveryData = {
+        disconnectedAt: recoveredSession.recoveryData?.disconnectedAt || new Date().toISOString(),
+        reconnectedAt: new Date().toISOString(),
+        messagesBeforeDisconnect: recoveredSession.messages.length,
+      };
+    } else {
+      setMessages([]);
+      sessionStartTimeRef.current = Date.now();
+    }
+
     setCurrentSession(session);
-    sessionStartTimeRef.current = Date.now();
-    setMessages([]);
     onSessionStart?.(session);
   }, [onSessionStart]);
+
+  // Auto-save session state periodically
+  useEffect(() => {
+    if (!currentSession || currentSession.status !== 'active') {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Auto-save every 10 seconds
+    autoSaveIntervalRef.current = setInterval(() => {
+      if (currentSession) {
+        const duration = sessionStartTimeRef.current
+          ? Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
+          : 0;
+
+        const sessionToSave: VoiceSession = {
+          ...currentSession,
+          messages,
+          metrics: {
+            ...currentSession.metrics,
+            totalDuration: duration,
+            messagesExchanged: messages.length,
+          },
+          lastSavedAt: new Date().toISOString(),
+        };
+
+        // Save to active session storage for recovery
+        import('@/lib/voiceSessionStorage').then(({ saveActiveSession }) => {
+          saveActiveSession(sessionToSave);
+        });
+      }
+    }, 10000); // Every 10 seconds
+
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+    };
+  }, [currentSession, messages]);
 
   // End current session
   const endSession = useCallback(() => {
@@ -184,6 +247,9 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
     const duration = Math.floor(
       (Date.now() - sessionStartTimeRef.current) / 1000
     );
+
+    // Get full audio recording if available
+    const audioRecording = audioCaptureRef.current?.getFullRecording() || null;
 
     const finalSession: VoiceSession = {
       ...currentSession,
@@ -199,6 +265,28 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
 
     setCurrentSession(null);
     sessionStartTimeRef.current = null;
+    
+    // Clear active session from recovery storage
+    import('@/lib/voiceSessionStorage').then(({ clearActiveSession }) => {
+      clearActiveSession();
+    });
+    
+    // Store audio recording if available
+    if (audioRecording) {
+      import('@/lib/audioStorage').then(({ saveAudioRecording }) => {
+        const recording = {
+          sessionId: finalSession.id,
+          audioBlob: audioRecording,
+          duration: duration,
+          recordedAt: new Date().toISOString(),
+          format: audioRecording.type,
+        };
+        saveAudioRecording(recording).catch((error) => {
+          console.error('Failed to save audio recording:', error);
+        });
+      });
+    }
+    
     onSessionEnd?.(finalSession);
   }, [currentSession, messages, onSessionEnd]);
 
@@ -284,6 +372,11 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
     []
   );
 
+  // Expose WebSocket for quality monitoring
+  const getWebSocket = useCallback(() => {
+    return clientRef.current?.getWebSocket() || null;
+  }, []);
+
   return {
     // State
     state,
@@ -303,6 +396,7 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
 
     // Utilities
     isReady: state.isConnected && !state.error,
+    getWebSocket,
   };
 }
 

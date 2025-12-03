@@ -1,8 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Pause, Play, Square, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Pause, Play, Square, Volume2, Wifi, WifiOff } from 'lucide-react';
 import { VoiceAgentState } from '@/types';
+import { ConnectionQuality } from '@/lib/connectionQuality';
+import { useState, useEffect } from 'react';
 
 interface AudioControlsProps {
   state: VoiceAgentState;
@@ -11,6 +13,7 @@ interface AudioControlsProps {
   onPause: () => void;
   onResume: () => void;
   onDisconnect: () => void;
+  connectionQuality?: ConnectionQuality;
 }
 
 export default function AudioControls({
@@ -20,6 +23,7 @@ export default function AudioControls({
   onPause,
   onResume,
   onDisconnect,
+  connectionQuality,
 }: AudioControlsProps) {
   const getConnectionStatusColor = () => {
     switch (state.connectionStatus) {
@@ -37,20 +41,42 @@ export default function AudioControls({
   return (
     <div className="space-y-4">
       {/* Connection Status */}
-      <div className="flex items-center gap-2">
-        <div
-          className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}
-          title={state.connectionStatus}
-        />
-        <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-          {state.connectionStatus === 'connected'
-            ? 'Connected'
-            : state.connectionStatus === 'connecting'
-            ? 'Connecting...'
-            : state.connectionStatus === 'error'
-            ? 'Connection Error'
-            : 'Disconnected'}
-        </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div
+            className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}
+            title={state.connectionStatus}
+          />
+          <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">
+            {state.connectionStatus === 'connected'
+              ? 'Connected'
+              : state.connectionStatus === 'connecting'
+              ? 'Connecting...'
+              : state.connectionStatus === 'error'
+              ? 'Connection Error'
+              : 'Disconnected'}
+          </span>
+        </div>
+        
+        {/* Connection Quality Indicator */}
+        {state.connectionStatus === 'connected' && connectionQuality && (
+          <div className="flex items-center gap-1 text-xs">
+            {connectionQuality.latency > 0 ? (
+              <>
+                <Wifi className={`w-3 h-3 ${connectionQuality.quality === 'poor' ? 'text-red-500' : connectionQuality.quality === 'fair' ? 'text-yellow-500' : 'text-green-500'}`} />
+                <span className="text-gray-500 dark:text-gray-400">
+                  {connectionQuality.latency.toFixed(0)}ms
+                </span>
+                <span className={`text-xs ${connectionQuality.quality === 'poor' ? 'text-red-600 dark:text-red-400' : connectionQuality.quality === 'fair' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                  ({connectionQuality.quality})
+                </span>
+              </>
+            ) : (
+              <WifiOff className="w-3 h-3 text-gray-400" />
+            )}
+          </div>
+        )}
+        
         {state.error && (
           <span className="text-sm text-red-600 dark:text-red-400 ml-2">
             {state.error}

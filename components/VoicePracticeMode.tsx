@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useElevenLabsAgent } from '@/hooks/useElevenLabsAgent';
 import { ElevenLabsAgentConfig, VoiceSession } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,14 @@ import { checkAudioSupport } from '@/lib/audioUtils';
 import { getAgentConfig, saveAgentConfig } from '@/lib/agentConfigStorage';
 import { saveVoiceScenarioSession, VoiceScenarioSession } from '@/lib/voiceScenarioStorage';
 import { formatScenarioContext } from '@/lib/scenarioContextFormatter';
+import { calculateAllGoalProgress, getActiveGoals } from '@/lib/voiceGoals';
+import { getActiveSession, hasRecoverableSession, clearActiveSession } from '@/lib/voiceSessionStorage';
+import { ConnectionQuality, createConnectionQualityMonitor } from '@/lib/connectionQuality';
+import { recordUsage, checkRateLimits, getDefaultRateLimitConfig, RateLimitConfig } from '@/lib/rateLimiting';
+import Celebration from './Celebration';
+import SessionRecovery from './SessionRecovery';
+import MicrophonePermissionPrompt from './MicrophonePermissionPrompt';
+import RateLimitWarning from './RateLimitWarning';
 import { AlertCircle, Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -21,6 +29,8 @@ interface VoicePracticeModeProps {
 }
 
 export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModeProps) {
+  const [achievedGoal, setAchievedGoal] = useState<{ message: string; icon?: string } | null>(null);
+  const goalsRef = useRef(getActiveGoals());
   const [agentConfig, setAgentConfig] = useState<ElevenLabsAgentConfig>(() => {
     // Load from storage or fallback to env
     if (typeof window !== 'undefined') {
@@ -35,6 +45,12 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
   const [selectedScenario, setSelectedScenario] = useState<VoiceScenario | null>(null);
   const [showScenarioSelector, setShowScenarioSelector] = useState(false);
   const [audioSupport, setAudioSupport] = useState(checkAudioSupport());
+  const [recoverableSession, setRecoverableSession] = useState<VoiceSession | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [microphoneError, setMicrophoneError] = useState<string | null>(null);
+  const [showMicPrompt, setShowMicPrompt] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality | null>(null);
+  const [rateLimitConfig, setRateLimitConfig] = useState<RateLimitConfig>(getDefaultRateLimitConfig());
 
   const {
     state,
@@ -50,6 +66,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     resume,
     sendText,
     isReady,
+    getWebSocket,
   } = useElevenLabsAgent({
     config: agentConfig,
     scenarioContext: selectedScenario ? formatScenarioContext(selectedScenario) : undefined,
@@ -95,7 +112,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
   }, []);
 
   // Enhanced session end handler for scenarios
-  const handleSessionEnd = useCallback((session: VoiceSession) => {
+  const handleSessionEnd = useCallback(async (session: VoiceSession) => {
     if (selectedScenario) {
       const scenarioSession: VoiceScenarioSession = {
         ...session,
@@ -108,12 +125,104 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     } else {
       onSessionEnd?.(session);
     }
+
+    // Record usage for rate limiting
+    const minutesUsed = session.metrics.totalDuration / 60; // Convert seconds to minutes
+    const messagesExchanged = session.metrics.messagesExchanged;
+    recordUsage(minutesUsed, messagesExchanged, 1);
+
+    // Check for goal achievements
+    try {
+      const progressData = await calculateAllGoalProgress();
+      const newlyCompleted = progressData.filter(
+        (p) => p.isCompleted && p.completedAt
+      );
+      if (newlyCompleted.length > 0) {
+        goalsRef.current = getActiveGoals();
+      const goal = goalsRef.current.find((g) => g.id === newlyCompleted[0].goalId);
+        if (goal) {
+          setAchievedGoal({
+            message: `Goal Achieved: ${goal.description || 'Practice Goal'}`,
+            icon: '🎯',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking goals:', error);
+    }
   }, [selectedScenario, onSessionEnd]);
+
+  // Handle recover session
+  const handleRecoverSession = useCallback((session: VoiceSession) => {
+    setShowRecovery(false);
+    setRecoverableSession(null);
+    
+    // Start session with recovered data
+    if (!state.isConnected) {
+      connect().then(() => {
+        startSession(session);
+        startListening();
+      });
+    } else {
+      startSession(session);
+      startListening();
+    }
+  }, [state.isConnected, connect, startSession, startListening]);
+
+  // Handle dismiss recovery
+  const handleDismissRecovery = useCallback(() => {
+    setShowRecovery(false);
+    clearActiveSession();
+    setRecoverableSession(null);
+  }, []);
+
+  // Handle microphone permission request
+  const handleRequestMicrophonePermission = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately - we just needed permission
+      stream.getTracks().forEach(track => track.stop());
+      setMicrophoneError(null);
+      setShowMicPrompt(false);
+      setAudioSupport(checkAudioSupport());
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to access microphone';
+      setMicrophoneError(errorMessage);
+      
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        setMicrophoneError('Microphone permission was denied. Please enable it in your browser settings.');
+      } else if (error instanceof Error && error.name === 'NotFoundError') {
+        setMicrophoneError('No microphone found. Please connect a microphone and try again.');
+      } else {
+        setMicrophoneError(`Unable to access microphone: ${errorMessage}`);
+      }
+    }
+  }, []);
 
   // Handle start session
   const handleStart = useCallback(async () => {
     if (!isConfigured) {
       alert('Please configure your ElevenLabs Agent ID in settings');
+      return;
+    }
+
+    // Check rate limits before starting
+    const rateLimitStatus = checkRateLimits(rateLimitConfig);
+    if (rateLimitStatus.isLimitReached) {
+      alert(
+        `API limit reached. ${rateLimitStatus.warnings.join(' ')} Please wait or upgrade your plan.`
+      );
+      return;
+    }
+
+    // Check microphone permission first
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      setMicrophoneError(null);
+    } catch (error) {
+      setMicrophoneError('Microphone access is required. Please enable it in your browser settings.');
+      setShowMicPrompt(true);
       return;
     }
 
@@ -126,7 +235,26 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     }
 
     await startListening();
-  }, [isConfigured, state.isConnected, connect, currentSession, startSession, startListening]);
+  }, [isConfigured, state.isConnected, connect, currentSession, startSession, startListening, rateLimitConfig]);
+
+  // Monitor connection quality when connected
+  useEffect(() => {
+    if (!state.isConnected) {
+      setConnectionQuality(null);
+      return;
+    }
+
+    const ws = getWebSocket();
+    if (!ws) return;
+
+    const stopMonitoring = createConnectionQualityMonitor(
+      ws,
+      (quality) => setConnectionQuality(quality),
+      15000 // Every 15 seconds
+    );
+
+    return () => stopMonitoring();
+  }, [state.isConnected, getWebSocket]);
 
   // Handle stop
   const handleStop = useCallback(() => {
@@ -158,6 +286,15 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
 
     if (!support.microphone || !support.audioContext || !support.mediaRecorder) {
       console.warn('Audio features not fully supported in this browser');
+    }
+
+    // Check for recoverable session
+    if (hasRecoverableSession()) {
+      const session = getActiveSession();
+      if (session) {
+        setRecoverableSession(session);
+        setShowRecovery(true);
+      }
     }
   }, []);
 
@@ -258,7 +395,41 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
   }
 
   return (
-    <Card>
+    <>
+      {achievedGoal && (
+        <Celebration
+          type="achievement"
+          message={achievedGoal.message}
+          icon={achievedGoal.icon}
+          onComplete={() => setAchievedGoal(null)}
+        />
+      )}
+      
+      {/* Session Recovery Prompt */}
+      {showRecovery && recoverableSession && (
+        <SessionRecovery
+          session={recoverableSession}
+          onRecover={handleRecoverSession}
+          onDismiss={handleDismissRecovery}
+        />
+      )}
+
+      {/* Microphone Permission Prompt */}
+      {showMicPrompt && (
+        <MicrophonePermissionPrompt
+          onRequestPermission={handleRequestMicrophonePermission}
+          onDismiss={() => setShowMicPrompt(false)}
+          error={microphoneError || undefined}
+        />
+      )}
+
+      {/* Rate Limit Warning */}
+      <RateLimitWarning
+        config={rateLimitConfig}
+        showDetails={true}
+      />
+
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -391,6 +562,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
           onPause={handlePause}
           onResume={handleResume}
           onDisconnect={handleDisconnect}
+          connectionQuality={connectionQuality || undefined}
         />
 
         {/* Conversation Transcript */}
@@ -420,6 +592,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
 

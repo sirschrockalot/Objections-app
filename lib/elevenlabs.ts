@@ -119,6 +119,11 @@ export class ElevenLabsClient {
           console.log('ElevenLabs WebSocket closed', event.code, event.reason);
           this.onStatusChange?.('disconnected');
 
+          // Notify about disconnection for session recovery
+          if (!this.isIntentionallyClosed) {
+            this.onError?.(new Error(`Connection lost. ${event.reason || 'WebSocket closed unexpectedly'}`));
+          }
+
           // Attempt to reconnect if not intentionally closed
           if (!this.isIntentionallyClosed && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
@@ -127,6 +132,9 @@ export class ElevenLabsClient {
             setTimeout(() => {
               this.connect().catch(console.error);
             }, delay);
+          } else if (!this.isIntentionallyClosed && this.reconnectAttempts >= this.maxReconnectAttempts) {
+            // Max reconnection attempts reached
+            this.onError?.(new Error('Failed to reconnect after multiple attempts. Please try again.'));
           }
         };
       } catch (error) {
@@ -281,6 +289,13 @@ export class ElevenLabsClient {
    */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Get WebSocket instance (for quality monitoring)
+   */
+  getWebSocket(): WebSocket | null {
+    return this.ws;
   }
 
   /**
