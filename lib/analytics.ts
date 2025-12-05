@@ -52,8 +52,8 @@ export interface MonthlyReport {
 }
 
 // Confidence Trend Analytics
-export function getConfidenceTrendData(days: number = 30): TrendDataPoint[] {
-  const ratings = getConfidenceRatings();
+export async function getConfidenceTrendData(days: number = 30): Promise<TrendDataPoint[]> {
+  const ratings = await getConfidenceRatings();
   const now = new Date();
   const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   
@@ -89,10 +89,12 @@ export function getConfidenceTrendData(days: number = 30): TrendDataPoint[] {
 }
 
 // Heat Map Analytics
-export function getHeatMapData(): HeatMapData[] {
-  const objections = getObjections();
-  const history = getPracticeHistory();
-  const ratings = getConfidenceRatings();
+export async function getHeatMapData(): Promise<HeatMapData[]> {
+  const [objections, history, ratings] = await Promise.all([
+    getObjections(),
+    getPracticeHistory(),
+    getConfidenceRatings(),
+  ]);
   
   // Calculate practice counts
   const practiceCounts = new Map<string, number>();
@@ -148,11 +150,13 @@ export function getHeatMapData(): HeatMapData[] {
 }
 
 // Category Mastery Analytics
-export function getCategoryMasteryData(): CategoryMastery[] {
-  const objections = getObjections();
-  const categoryStats = getCategoryStats();
-  const ratings = getConfidenceRatings();
-  const history = getPracticeHistory();
+export async function getCategoryMasteryData(): Promise<CategoryMastery[]> {
+  const [objections, categoryStats, ratings, history] = await Promise.all([
+    getObjections(),
+    getCategoryStats(),
+    getConfidenceRatings(),
+    getPracticeHistory(),
+  ]);
   
   // Group ratings by category
   const ratingsByCategory = new Map<string, number[]>();
@@ -203,10 +207,13 @@ export function getCategoryMasteryData(): CategoryMastery[] {
 }
 
 // Weekly Report Analytics
-export function getWeeklyReports(weeks: number = 8): WeeklyReport[] {
-  const sessions = getPracticeSessions();
-  const history = getPracticeHistory();
-  const ratings = getConfidenceRatings();
+export async function getWeeklyReports(weeks: number = 8): Promise<WeeklyReport[]> {
+  const [sessions, history, ratings, objections] = await Promise.all([
+    getPracticeSessions(),
+    getPracticeHistory(),
+    getConfidenceRatings(),
+    getObjections(),
+  ]);
   
   const reports: WeeklyReport[] = [];
   const now = new Date();
@@ -247,7 +254,7 @@ export function getWeeklyReports(weeks: number = 8): WeeklyReport[] {
     // Get categories practiced
     const categoriesPracticed = new Set<string>();
     weekObjections.forEach(id => {
-      const objection = getObjections().find(o => o.id === id);
+      const objection = objections.find(o => o.id === id);
       if (objection) {
         categoriesPracticed.add(objection.category);
       }
@@ -269,11 +276,13 @@ export function getWeeklyReports(weeks: number = 8): WeeklyReport[] {
 }
 
 // Monthly Report Analytics
-export function getMonthlyReports(months: number = 6): MonthlyReport[] {
-  const sessions = getPracticeSessions();
-  const history = getPracticeHistory();
-  const ratings = getConfidenceRatings();
-  const objections = getObjections();
+export async function getMonthlyReports(months: number = 6): Promise<MonthlyReport[]> {
+  const [sessions, history, ratings, objections] = await Promise.all([
+    getPracticeSessions(),
+    getPracticeHistory(),
+    getConfidenceRatings(),
+    getObjections(),
+  ]);
   
   const reports: MonthlyReport[] = [];
   const now = new Date();
@@ -346,10 +355,12 @@ export function getMonthlyReports(months: number = 6): MonthlyReport[] {
 }
 
 // Improvement Graph Data
-export function getImprovementData(): { category: string; data: TrendDataPoint[] }[] {
-  const objections = getObjections();
+export async function getImprovementData(): Promise<{ category: string; data: TrendDataPoint[] }[]> {
+  const [objections, ratings] = await Promise.all([
+    getObjections(),
+    getConfidenceRatings(),
+  ]);
   const categories = Array.from(new Set(objections.map(o => o.category)));
-  const ratings = getConfidenceRatings();
   
   return categories.map(category => {
     const categoryObjections = objections.filter(o => o.category === category);
@@ -383,4 +394,3 @@ export function getImprovementData(): { category: string; data: TrendDataPoint[]
     return { category, data };
   });
 }
-

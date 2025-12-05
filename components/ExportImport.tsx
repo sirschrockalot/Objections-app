@@ -37,9 +37,9 @@ export default function ExportImport() {
     importPracticeHistory: true,
   });
 
-  const handleExportAll = () => {
+  const handleExportAll = async () => {
     try {
-      const data = exportAllData();
+      const data = await exportAllData();
       const filename = `objections-app-backup-${new Date().toISOString().split('T')[0]}.json`;
       downloadJSON(data, filename);
     } catch (error) {
@@ -47,22 +47,22 @@ export default function ExportImport() {
     }
   };
 
-  const handleExportCSV = (type: 'responses' | 'sessions' | 'ratings') => {
+  const handleExportCSV = async (type: 'responses' | 'sessions' | 'ratings') => {
     try {
       let csv: string;
       let filename: string;
 
       switch (type) {
         case 'responses':
-          csv = exportCustomResponsesCSV();
+          csv = await exportCustomResponsesCSV();
           filename = `custom-responses-${new Date().toISOString().split('T')[0]}.csv`;
           break;
         case 'sessions':
-          csv = exportPracticeSessionsCSV();
+          csv = await exportPracticeSessionsCSV();
           filename = `practice-sessions-${new Date().toISOString().split('T')[0]}.csv`;
           break;
         case 'ratings':
-          csv = exportConfidenceRatingsCSV();
+          csv = await exportConfidenceRatingsCSV();
           filename = `confidence-ratings-${new Date().toISOString().split('T')[0]}.csv`;
           break;
         default:

@@ -25,8 +25,8 @@ export default function VoiceSessionAnalytics() {
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    const loadAnalytics = () => {
-      const data = calculateVoiceAnalytics();
+    const loadAnalytics = async () => {
+      const data = await calculateVoiceAnalytics();
       setAnalytics(data);
     };
 

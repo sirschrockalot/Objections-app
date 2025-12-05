@@ -1,14 +1,39 @@
 import { LearningPathProgress, DailyChallenge } from '@/types';
+import { apiGet, apiPost } from './apiClient';
+import { getCurrentUserId, isAuthenticated } from './auth';
+import { getObjections } from './storage';
 
 const LEARNING_PATH_PROGRESS_KEY = 'objections-app-learning-path-progress';
 const DAILY_CHALLENGES_KEY = 'objections-app-daily-challenges';
 
+function shouldUseAPI(): boolean {
+  return typeof window !== 'undefined' && isAuthenticated();
+}
+
 /**
  * Get progress for a learning path
  */
-export function getPathProgress(pathId: string): LearningPathProgress | null {
+export async function getPathProgress(pathId: string): Promise<LearningPathProgress | null> {
   if (typeof window === 'undefined') return null;
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/learning-paths', { pathId });
+      if (data.progress && data.progress.length > 0) {
+        const progress = data.progress[0];
+        return {
+          ...progress,
+          completedSteps: new Set(progress.completedSteps),
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting path progress from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(LEARNING_PATH_PROGRESS_KEY);
     if (!stored) return null;
@@ -18,7 +43,6 @@ export function getPathProgress(pathId: string): LearningPathProgress | null {
     
     if (!progress) return null;
 
-    // Convert completedSteps array back to Set
     return {
       ...progress,
       completedSteps: new Set(progress.completedSteps as any),
@@ -32,14 +56,29 @@ export function getPathProgress(pathId: string): LearningPathProgress | null {
 /**
  * Save progress for a learning path
  */
-export function savePathProgress(progress: LearningPathProgress): void {
+export async function savePathProgress(progress: LearningPathProgress): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/learning-paths', {
+        progress: {
+          ...progress,
+          completedSteps: Array.from(progress.completedSteps),
+        },
+      });
+      return;
+    } catch (error) {
+      console.error('Error saving path progress to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(LEARNING_PATH_PROGRESS_KEY);
     const allProgress: LearningPathProgress[] = stored ? JSON.parse(stored) : [];
 
-    // Convert Set to array for storage
     const progressToSave = {
       ...progress,
       completedSteps: Array.from(progress.completedSteps),
@@ -61,8 +100,8 @@ export function savePathProgress(progress: LearningPathProgress): void {
 /**
  * Initialize or update path progress
  */
-export function startLearningPath(pathId: string): LearningPathProgress {
-  const existing = getPathProgress(pathId);
+export async function startLearningPath(pathId: string): Promise<LearningPathProgress> {
+  const existing = await getPathProgress(pathId);
   
   if (existing) {
     return existing;
@@ -76,21 +115,20 @@ export function startLearningPath(pathId: string): LearningPathProgress {
     lastPracticedAt: new Date().toISOString(),
   };
 
-  savePathProgress(newProgress);
+  await savePathProgress(newProgress);
   return newProgress;
 }
 
 /**
  * Mark objection as completed in path
  */
-export function completePathStep(pathId: string, objectionId: string): void {
-  const progress = getPathProgress(pathId);
+export async function completePathStep(pathId: string, objectionId: string): Promise<void> {
+  const progress = await getPathProgress(pathId);
   if (!progress) return;
 
   progress.completedSteps.add(objectionId);
   progress.lastPracticedAt = new Date().toISOString();
   
-  // Update current step to next uncompleted objection
   const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (path) {
@@ -100,19 +138,18 @@ export function completePathStep(pathId: string, objectionId: string): void {
     if (nextIndex >= 0) {
       progress.currentStep = nextIndex;
     } else {
-      // All steps completed
       progress.completedAt = new Date().toISOString();
     }
   }
 
-  savePathProgress(progress);
+  await savePathProgress(progress);
 }
 
 /**
  * Get current objection for path
  */
-export function getCurrentPathObjection(pathId: string): string | null {
-  const progress = getPathProgress(pathId);
+export async function getCurrentPathObjection(pathId: string): Promise<string | null> {
+  const progress = await getPathProgress(pathId);
   if (!progress) return null;
 
   const { getLearningPathById } = require('@/data/learningPaths');
@@ -125,8 +162,8 @@ export function getCurrentPathObjection(pathId: string): string | null {
 /**
  * Check if path is completed
  */
-export function isPathCompleted(pathId: string): boolean {
-  const progress = getPathProgress(pathId);
+export async function isPathCompleted(pathId: string): Promise<boolean> {
+  const progress = await getPathProgress(pathId);
   if (!progress) return false;
 
   const { getLearningPathById } = require('@/data/learningPaths');
@@ -139,15 +176,15 @@ export function isPathCompleted(pathId: string): boolean {
 /**
  * Get completion percentage for path
  */
-export function getPathCompletionPercentage(pathId: string): number {
-  const progress = getPathProgress(pathId);
+export async function getPathCompletionPercentage(pathId: string): Promise<number> {
+  const progress = await getPathProgress(pathId);
   if (!progress) return 0;
 
   const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (!path) return 0;
 
-    const completed = path.objections.filter((id: string) => progress.completedSteps.has(id)).length;
+  const completed = path.objections.filter((id: string) => progress.completedSteps.has(id)).length;
   return Math.round((completed / path.objections.length) * 100);
 }
 
@@ -169,11 +206,9 @@ export function getDailyChallenge(): DailyChallenge | null {
       }
     }
 
-    // Create new daily challenge
-    const { getObjections } = require('@/lib/storage');
-    const objections = getObjections();
+    // Create new daily challenge - this still uses localStorage for now
+    const objections = getObjectionsSync();
     
-    // Select 3-5 random objections for today's challenge
     const shuffled = [...objections].sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, Math.min(5, Math.max(3, Math.floor(Math.random() * 3) + 3)));
     
@@ -186,10 +221,8 @@ export function getDailyChallenge(): DailyChallenge | null {
       completed: false,
     };
 
-    // Save challenge
     const challenges: DailyChallenge[] = stored ? JSON.parse(stored) : [];
     challenges.push(challenge);
-    // Keep only last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const filtered = challenges.filter(c => new Date(c.date) >= thirtyDaysAgo);
@@ -245,9 +278,30 @@ function getDailyTheme(): string {
 /**
  * Get all completed paths
  */
-export function getCompletedPaths(): string[] {
+export async function getCompletedPaths(): Promise<string[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/learning-paths');
+      const { getAllLearningPaths } = require('@/data/learningPaths');
+      const allPaths = getAllLearningPaths();
+
+      return (data.progress || [])
+        .filter((progress: any) => {
+          const path = allPaths.find((p: any) => p.id === progress.pathId);
+          if (!path) return false;
+          const completedSet = new Set(progress.completedSteps);
+          return path.objections.every((id: string) => completedSet.has(id));
+        })
+        .map((progress: any) => progress.pathId);
+    } catch (error) {
+      console.error('Error getting completed paths from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(LEARNING_PATH_PROGRESS_KEY);
     if (!stored) return [];
@@ -260,7 +314,6 @@ export function getCompletedPaths(): string[] {
       .filter((progress: LearningPathProgress) => {
         const path = allPaths.find((p: any) => p.id === progress.pathId);
         if (!path) return false;
-        // Convert completedSteps array back to Set for checking
         const completedSet = new Set(progress.completedSteps as any);
         return path.objections.every((id: string) => completedSet.has(id));
       })
@@ -271,3 +324,8 @@ export function getCompletedPaths(): string[] {
   }
 }
 
+// Helper function for getDailyChallenge
+function getObjectionsSync() {
+  const { getObjectionsSync } = require('@/lib/storage');
+  return getObjectionsSync();
+}

@@ -145,7 +145,11 @@ export default function VoicePracticeGoals() {
 
   const activeGoals = goals.filter((g) => g.isActive);
   const completedGoals = goals.filter((g) => g.completedAt && !g.isActive);
-  const recommendations = getGoalRecommendations();
+  const [recommendations, setRecommendations] = useState<Partial<VoicePracticeGoal>[]>([]);
+
+  useEffect(() => {
+    getGoalRecommendations().then(setRecommendations);
+  }, []);
 
   return (
     <div className="space-y-6">

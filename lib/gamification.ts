@@ -1,33 +1,57 @@
 import { PointsEntry, UserLevel, CategoryMastery } from '@/types';
-import { getPracticeSessions, getConfidenceRatings, getObjections, getCategoryStats } from './storage';
+import { getPracticeSessions, getConfidenceRatings, getObjections, getCategoryStats, invalidateStatsCache } from './storage';
+import { apiGet, apiPost } from './apiClient';
+import { getCurrentUserId, isAuthenticated } from './auth';
 
 const POINTS_KEY = 'objections-app-points';
-const USER_ID_KEY = 'objections-app-user-id';
 
-function getUserId(): string {
-  if (typeof window === 'undefined') return 'user-1';
-  
-  let userId = localStorage.getItem(USER_ID_KEY);
-  if (!userId) {
-    userId = `user-${Date.now()}`;
-    localStorage.setItem(USER_ID_KEY, userId);
-  }
-  return userId;
+function shouldUseAPI(): boolean {
+  return typeof window !== 'undefined' && isAuthenticated();
 }
 
 // Points System
-export function addPoints(points: number, reason: string, metadata?: Record<string, any>): PointsEntry {
+export async function addPoints(points: number, reason: string, metadata?: Record<string, any>): Promise<PointsEntry> {
   if (typeof window === 'undefined') {
     throw new Error('Cannot add points in server environment');
   }
 
+  if (shouldUseAPI()) {
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+
+      const data = await apiPost('/api/data/points', {
+        points,
+        reason,
+        metadata,
+        pointsId: `points-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      });
+
+      invalidateStatsCache(); // Invalidate cache when points are added
+
+      return {
+        id: data.entry.id,
+        userId: userId,
+        points: data.entry.points,
+        reason: data.entry.reason,
+        date: data.entry.date,
+        metadata: data.entry.metadata,
+      };
+    } catch (error) {
+      console.error('Error adding points via API:', error);
+      // Fall through to localStorage
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(POINTS_KEY);
     const allPoints: PointsEntry[] = stored ? JSON.parse(stored) : [];
 
+    const userId = getCurrentUserId() || `user-${Date.now()}`;
     const entry: PointsEntry = {
       id: `points-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      userId: getUserId(),
+      userId,
       points,
       reason,
       date: new Date().toISOString(),
@@ -37,6 +61,8 @@ export function addPoints(points: number, reason: string, metadata?: Record<stri
     allPoints.push(entry);
     localStorage.setItem(POINTS_KEY, JSON.stringify(allPoints));
 
+    invalidateStatsCache(); // Invalidate cache when points are added
+
     return entry;
   } catch (error) {
     console.error('Error adding points:', error);
@@ -44,15 +70,26 @@ export function addPoints(points: number, reason: string, metadata?: Record<stri
   }
 }
 
-export function getTotalPoints(): number {
+export async function getTotalPoints(): Promise<number> {
   if (typeof window === 'undefined') return 0;
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/points');
+      return data.total || 0;
+    } catch (error) {
+      console.error('Error getting total points from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(POINTS_KEY);
     if (!stored) return 0;
 
     const allPoints: PointsEntry[] = JSON.parse(stored);
-    const userId = getUserId();
+    const userId = getCurrentUserId() || `user-${Date.now()}`;
     return allPoints
       .filter(p => p.userId === userId)
       .reduce((sum, entry) => sum + entry.points, 0);
@@ -62,15 +99,27 @@ export function getTotalPoints(): number {
   }
 }
 
-export function getPointsHistory(limit?: number): PointsEntry[] {
+export async function getPointsHistory(limit?: number): Promise<PointsEntry[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/points');
+      const history = data.history || [];
+      return limit ? history.slice(0, limit) : history;
+    } catch (error) {
+      console.error('Error getting points history from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(POINTS_KEY);
     if (!stored) return [];
 
     const allPoints: PointsEntry[] = JSON.parse(stored);
-    const userId = getUserId();
+    const userId = getCurrentUserId() || `user-${Date.now()}`;
     const userPoints = allPoints
       .filter(p => p.userId === userId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -93,10 +142,9 @@ const LEVEL_THRESHOLDS = [
   { level: 7, name: 'Master', points: 2500 },
 ];
 
-export function getUserLevel(): UserLevel {
-  const totalPoints = getTotalPoints();
+export async function getUserLevel(): Promise<UserLevel> {
+  const totalPoints = await getTotalPoints();
   
-  // Find current level
   let currentLevel = LEVEL_THRESHOLDS[0];
   for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
     if (totalPoints >= LEVEL_THRESHOLDS[i].points) {
@@ -105,7 +153,6 @@ export function getUserLevel(): UserLevel {
     }
   }
 
-  // Find next level
   const currentIndex = LEVEL_THRESHOLDS.findIndex(l => l.level === currentLevel.level);
   const nextLevel = LEVEL_THRESHOLDS[currentIndex + 1] || null;
 
@@ -129,14 +176,15 @@ export function getUserLevel(): UserLevel {
 }
 
 // Category Mastery
-export function getCategoryMastery(): CategoryMastery[] {
+export async function getCategoryMastery(): Promise<CategoryMastery[]> {
   if (typeof window === 'undefined') return [];
 
-  const objections = getObjections();
-  const categoryStats = getCategoryStats();
-  const ratings = getConfidenceRatings();
+  const [objections, categoryStats, ratings] = await Promise.all([
+    getObjections(),
+    getCategoryStats(),
+    getConfidenceRatings(),
+  ]);
 
-  // Calculate average confidence per category
   const categoryRatings = new Map<string, number[]>();
   ratings.forEach(rating => {
     const objection = objections.find(o => o.id === rating.objectionId);
@@ -157,12 +205,10 @@ export function getCategoryMastery(): CategoryMastery[] {
       ? categoryRatingList.reduce((sum, r) => sum + r, 0) / categoryRatingList.length
       : 0;
 
-    // Mastery calculation: (practiced/total * 0.6 + averageConfidence/5 * 0.4) * 100
     const practiceRatio = stats.total > 0 ? stats.practiced / stats.total : 0;
     const confidenceRatio = averageConfidence / 5;
     const masteryLevel = Math.round((practiceRatio * 0.6 + confidenceRatio * 0.4) * 100);
 
-    // Badge thresholds
     let badgeEarned: string | undefined;
     if (masteryLevel >= 90) {
       badgeEarned = 'Master';
@@ -199,4 +245,3 @@ export const POINTS_VALUES = {
   CATEGORY_MASTERED: 50,
   ACHIEVEMENT_UNLOCKED: 25,
 };
-

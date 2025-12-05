@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getReviewStats, getAllReviewSchedules } from '@/lib/spacedRepetition';
+import { getAllStats } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Calendar, TrendingUp, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -16,9 +16,12 @@ export default function SpacedRepetitionStats() {
   });
 
   useEffect(() => {
-    const updateStats = () => {
+    const updateStats = async () => {
       try {
-        const reviewStats = getReviewStats();
+        // Use the batched stats API instead of individual calls
+        const allStats = await getAllStats();
+        const reviewStats = allStats.spacedRepetition;
+        
         setStats(prev => {
           if (
             prev.totalScheduled === reviewStats.totalScheduled &&
@@ -37,7 +40,7 @@ export default function SpacedRepetitionStats() {
     };
 
     updateStats();
-    const interval = setInterval(updateStats, 10000); // Update every 10 seconds
+    const interval = setInterval(updateStats, 30000); // Update every 30 seconds (reduced frequency)
     return () => clearInterval(interval);
   }, []);
 

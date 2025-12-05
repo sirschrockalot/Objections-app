@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { getReviewSchedule } from '@/lib/spacedRepetition';
 import { Clock, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -9,8 +10,12 @@ interface ReviewDueBadgeProps {
 }
 
 export default function ReviewDueBadge({ objectionId }: ReviewDueBadgeProps) {
-  const schedule = getReviewSchedule(objectionId);
+  const [schedule, setSchedule] = useState<any>(null);
 
+  useEffect(() => {
+    getReviewSchedule(objectionId).then(setSchedule);
+  }, [objectionId]);
+  
   if (!schedule) return null;
 
   if (schedule.isDue) {

@@ -38,12 +38,12 @@ function getAllComments(): Comment[] {
 /**
  * Export all app data as JSON
  */
-export function exportAllData(): ExportData {
+export async function exportAllData(): Promise<ExportData> {
   if (typeof window === 'undefined') {
     throw new Error('Export only available in browser');
   }
 
-  const objections = getObjections();
+  const objections = await getObjections();
   const customResponses: Array<{ objectionId: string; response: Response }> = [];
   
   objections.forEach(obj => {
@@ -60,17 +60,17 @@ export function exportAllData(): ExportData {
       customResponses: [], // Exclude custom responses from main array (they're in separate array)
     })),
     customResponses,
-    confidenceRatings: getConfidenceRatings(),
-    practiceSessions: getPracticeSessions(),
-    notes: getNotes(),
-    responseTemplates: getTemplates(),
-    practiceHistory: getPracticeHistory(),
-    comments: getAllComments(),
+    confidenceRatings: await getConfidenceRatings(),
+    practiceSessions: await getPracticeSessions(),
+    notes: await getNotes(),
+    responseTemplates: await getTemplates(),
+    practiceHistory: await getPracticeHistory(),
+    comments: await getAllComments(),
     points: {
-      total: getTotalPoints(),
-      history: getPointsHistory(),
+      total: await getTotalPoints(),
+      history: await getPointsHistory(),
     },
-    reviewSchedules: getAllReviewSchedules(),
+    reviewSchedules: await getAllReviewSchedules(),
   };
 
   return data;
@@ -97,8 +97,8 @@ export function downloadJSON(data: ExportData, filename: string = 'objections-ap
 /**
  * Export custom responses as CSV
  */
-export function exportCustomResponsesCSV(): string {
-  const objections = getObjections();
+export async function exportCustomResponsesCSV(): Promise<string> {
+  const objections = await getObjections();
   const rows: string[][] = [
     ['Objection ID', 'Objection Text', 'Category', 'Response ID', 'Response Text', 'Created At', 'Upvotes'],
   ];
@@ -123,8 +123,8 @@ export function exportCustomResponsesCSV(): string {
 /**
  * Export practice sessions as CSV
  */
-export function exportPracticeSessionsCSV(): string {
-  const sessions = getPracticeSessions();
+export async function exportPracticeSessionsCSV(): Promise<string> {
+  const sessions = await getPracticeSessions();
   const rows: string[][] = [
     ['Session ID', 'Date', 'Duration (seconds)', 'Objections Practiced', 'Challenge Mode', 'Time Limit', 'Goal'],
   ];
@@ -147,9 +147,11 @@ export function exportPracticeSessionsCSV(): string {
 /**
  * Export confidence ratings as CSV
  */
-export function exportConfidenceRatingsCSV(): string {
-  const ratings = getConfidenceRatings();
-  const objections = getObjections();
+export async function exportConfidenceRatingsCSV(): Promise<string> {
+  const [ratings, objections] = await Promise.all([
+    getConfidenceRatings(),
+    getObjections(),
+  ]);
   const rows: string[][] = [
     ['Objection ID', 'Objection Text', 'Category', 'Rating', 'Date'],
   ];

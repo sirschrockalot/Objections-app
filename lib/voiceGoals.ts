@@ -72,7 +72,7 @@ export function deleteVoiceGoal(goalId: string): void {
  * Calculate progress for a goal
  */
 export async function calculateGoalProgress(goal: VoicePracticeGoal): Promise<GoalProgress> {
-  const sessions = getVoiceSessions();
+  const sessions = await getVoiceSessions();
   const completedSessions = sessions.filter((s) => s.status === 'completed');
 
   let current = 0;
@@ -265,9 +265,11 @@ export async function calculateAllGoalProgress(): Promise<GoalProgress[]> {
 /**
  * Get goal recommendations based on user performance
  */
-export function getGoalRecommendations(): Partial<VoicePracticeGoal>[] {
-  const stats = getVoiceSessionStats();
-  const sessions = getVoiceSessions();
+export async function getGoalRecommendations(): Promise<Partial<VoicePracticeGoal>[]> {
+  const [stats, sessions] = await Promise.all([
+    getVoiceSessionStats(),
+    getVoiceSessions(),
+  ]);
   const completedSessions = sessions.filter((s) => s.status === 'completed');
 
   const recommendations: Partial<VoicePracticeGoal>[] = [];

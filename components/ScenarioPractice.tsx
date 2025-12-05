@@ -24,12 +24,16 @@ export default function ScenarioPractice({ scenario, onComplete, onExit }: Scena
   const [followUpResponse, setFollowUpResponse] = useState<string>('');
   const [scenarioComplete, setScenarioComplete] = useState(false);
 
-  const allObjections = getObjections();
+  const [allObjections, setAllObjections] = useState<Objection[]>([]);
   const currentScenarioObjection = scenario.objections[currentObjectionIndex];
   const isLastObjection = currentObjectionIndex === scenario.objections.length - 1;
 
   useEffect(() => {
-    if (currentScenarioObjection) {
+    getObjections().then(setAllObjections);
+  }, []);
+
+  useEffect(() => {
+    if (currentScenarioObjection && allObjections.length > 0) {
       const objection = allObjections.find(o => o.id === currentScenarioObjection.objectionId);
       setCurrentObjection(objection || null);
     }

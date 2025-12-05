@@ -8,6 +8,11 @@ import {
   getWeeklyReports,
   getMonthlyReports,
   getImprovementData,
+  TrendDataPoint,
+  HeatMapData,
+  CategoryMastery,
+  WeeklyReport,
+  MonthlyReport,
 } from '@/lib/analytics';
 import ConfidenceTrendChart from './ConfidenceTrendChart';
 import HeatMap from './HeatMap';
@@ -25,14 +30,40 @@ interface AnalyticsDashboardProps {
 export default function AnalyticsDashboard({ onSelectObjection }: AnalyticsDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'heatmap' | 'mastery' | 'reports'>('overview');
   const [trendDays, setTrendDays] = useState(30);
+  const [confidenceTrend, setConfidenceTrend] = useState<TrendDataPoint[]>([]);
+  const [heatMapData, setHeatMapData] = useState<HeatMapData[]>([]);
+  const [categoryMastery, setCategoryMastery] = useState<CategoryMastery[]>([]);
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
+  const [monthlyReports, setMonthlyReports] = useState<MonthlyReport[]>([]);
+  const [improvementData, setImprovementData] = useState<{ category: string; data: TrendDataPoint[] }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load data
-  const confidenceTrend = getConfidenceTrendData(trendDays);
-  const heatMapData = getHeatMapData();
-  const categoryMastery = getCategoryMasteryData();
-  const weeklyReports = getWeeklyReports(8);
-  const monthlyReports = getMonthlyReports(6);
-  const improvementData = getImprovementData();
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const [trend, heatMap, mastery, weekly, monthly, improvement] = await Promise.all([
+          getConfidenceTrendData(trendDays),
+          getHeatMapData(),
+          getCategoryMasteryData(),
+          getWeeklyReports(8),
+          getMonthlyReports(6),
+          getImprovementData(),
+        ]);
+        setConfidenceTrend(trend);
+        setHeatMapData(heatMap);
+        setCategoryMastery(mastery);
+        setWeeklyReports(weekly);
+        setMonthlyReports(monthly);
+        setImprovementData(improvement);
+      } catch (error) {
+        console.error('Error loading analytics data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, [trendDays]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -41,6 +72,17 @@ export default function AnalyticsDashboard({ onSelectObjection }: AnalyticsDashb
     { id: 'mastery', label: 'Mastery', icon: Trophy },
     { id: 'reports', label: 'Reports', icon: Calendar },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -109,7 +151,7 @@ export default function AnalyticsDashboard({ onSelectObjection }: AnalyticsDashb
               </div>
             </CardHeader>
           </Card>
-          <ConfidenceTrendChart data={getConfidenceTrendData(trendDays)} />
+          <ConfidenceTrendChart data={confidenceTrend} />
           <ImprovementGraph data={improvementData} />
         </div>
       )}

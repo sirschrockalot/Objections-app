@@ -1,20 +1,38 @@
 /**
  * Storage utilities for voice practice sessions
+ * Now uses MongoDB via API routes
  */
 
 import { VoiceSession } from '@/types';
+import { apiGet, apiPost, apiDelete } from './apiClient';
+import { getCurrentUserId, isAuthenticated } from './auth';
 
 const VOICE_SESSIONS_KEY = 'response-ready-voice-sessions';
 const ACTIVE_SESSION_KEY = 'response-ready-active-voice-session';
 
+function shouldUseAPI(): boolean {
+  return typeof window !== 'undefined' && isAuthenticated();
+}
+
 /**
  * Save a voice session
  */
-export function saveVoiceSession(session: VoiceSession): void {
+export async function saveVoiceSession(session: VoiceSession): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/voice-sessions', { session });
+      return;
+    } catch (error) {
+      console.error('Error saving voice session to API:', error);
+      // Fall through to localStorage
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const sessions = getVoiceSessions();
+    const sessions = getVoiceSessionsSync();
     const existingIndex = sessions.findIndex((s) => s.id === session.id);
 
     if (existingIndex >= 0) {
@@ -37,9 +55,24 @@ export function saveVoiceSession(session: VoiceSession): void {
 /**
  * Get all voice sessions
  */
-export function getVoiceSessions(): VoiceSession[] {
+export async function getVoiceSessions(): Promise<VoiceSession[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/voice-sessions');
+      return data.sessions || [];
+    } catch (error) {
+      console.error('Error loading voice sessions from API:', error);
+      // Fall through
+    }
+  }
+
+  return getVoiceSessionsSync();
+}
+
+function getVoiceSessionsSync(): VoiceSession[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(VOICE_SESSIONS_KEY);
     if (!stored) return [];
@@ -53,19 +86,43 @@ export function getVoiceSessions(): VoiceSession[] {
 /**
  * Get a specific voice session by ID
  */
-export function getVoiceSession(sessionId: string): VoiceSession | null {
-  const sessions = getVoiceSessions();
+export async function getVoiceSession(sessionId: string): Promise<VoiceSession | null> {
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/voice-sessions', { sessionId });
+      if (data.sessions && data.sessions.length > 0) {
+        return data.sessions[0];
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting voice session from API:', error);
+      // Fall through
+    }
+  }
+
+  const sessions = getVoiceSessionsSync();
   return sessions.find((s) => s.id === sessionId) || null;
 }
 
 /**
  * Delete a voice session
  */
-export function deleteVoiceSession(sessionId: string): void {
+export async function deleteVoiceSession(sessionId: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiDelete('/api/data/voice-sessions', { sessionId });
+      return;
+    } catch (error) {
+      console.error('Error deleting voice session via API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const sessions = getVoiceSessions();
+    const sessions = getVoiceSessionsSync();
     const filtered = sessions.filter((s) => s.id !== sessionId);
     localStorage.setItem(VOICE_SESSIONS_KEY, JSON.stringify(filtered));
   } catch (error) {
@@ -76,14 +133,14 @@ export function deleteVoiceSession(sessionId: string): void {
 /**
  * Get voice session statistics
  */
-export function getVoiceSessionStats(): {
+export async function getVoiceSessionStats(): Promise<{
   totalSessions: number;
   totalDuration: number; // in seconds
   totalMessages: number;
   averageSessionDuration: number;
   lastSessionDate: string | null;
-} {
-  const sessions = getVoiceSessions();
+}> {
+  const sessions = await getVoiceSessions();
   const completedSessions = sessions.filter((s) => s.status === 'completed');
 
   const totalDuration = completedSessions.reduce(
@@ -161,7 +218,6 @@ export function hasRecoverableSession(): boolean {
   const activeSession = getActiveSession();
   if (!activeSession) return false;
   
-  // Session is recoverable if it's active or paused and less than 1 hour old
   if (activeSession.status === 'active' || activeSession.status === 'paused') {
     const lastSaved = activeSession.lastSavedAt 
       ? new Date(activeSession.lastSavedAt).getTime()
@@ -172,4 +228,3 @@ export function hasRecoverableSession(): boolean {
   
   return false;
 }
-

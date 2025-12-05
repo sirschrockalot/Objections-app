@@ -18,16 +18,20 @@ export default function ObjectionOfTheDay({ onSelectObjection }: ObjectionOfTheD
   const [objectionText, setObjectionText] = useState<string>('');
 
   useEffect(() => {
-    const data = getObjectionOfTheDay();
-    setObjectionOfDay(data);
+    const loadData = async () => {
+      const data = await getObjectionOfTheDay();
+      setObjectionOfDay(data);
 
-    if (data) {
-      const objections = getObjections();
-      const objection = objections.find(o => o.id === data.objectionId);
-      if (objection) {
-        setObjectionText(objection.text);
+      if (data) {
+        getObjections().then(objections => {
+          const objection = objections.find(o => o.id === data.objectionId);
+          if (objection) {
+            setObjectionText(objection.text);
+          }
+        });
       }
-    }
+    };
+    loadData();
   }, []);
 
   if (!objectionOfDay) return null;

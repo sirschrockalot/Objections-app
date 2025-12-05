@@ -1,5 +1,7 @@
 import { PracticeHistoryEntry } from '@/types';
-import { getPracticeHistory, getLatestConfidenceRating, getConfidenceRatings } from './storage';
+import { getPracticeHistory, getLatestConfidenceRating, getConfidenceRatings, invalidateStatsCache } from './storage';
+import { apiGet, apiPost } from './apiClient';
+import { getCurrentUserId, isAuthenticated } from './auth';
 
 export interface ReviewSchedule {
   objectionId: string;
@@ -13,6 +15,10 @@ export interface ReviewSchedule {
 
 const INITIAL_EASE_FACTOR = 2.5;
 const MIN_EASE_FACTOR = 1.3;
+
+function shouldUseAPI(): boolean {
+  return typeof window !== 'undefined' && isAuthenticated();
+}
 
 /**
  * SM-2 Algorithm for Spaced Repetition
@@ -102,9 +108,23 @@ export function calculateNextReview(
 /**
  * Get review schedule for an objection
  */
-export function getReviewSchedule(objectionId: string): ReviewSchedule | null {
+export async function getReviewSchedule(objectionId: string): Promise<ReviewSchedule | null> {
   if (typeof window === 'undefined') return null;
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/review-schedules', { objectionId });
+      if (data.schedules && data.schedules.length > 0) {
+        return data.schedules[0];
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting review schedule from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem('objections-app-review-schedules');
     if (!stored) return null;
@@ -114,7 +134,6 @@ export function getReviewSchedule(objectionId: string): ReviewSchedule | null {
     
     if (!schedule) return null;
 
-    // Check if review is due
     const today = new Date().toISOString().split('T')[0];
     const isDue = schedule.nextReviewDate <= today;
 
@@ -131,9 +150,21 @@ export function getReviewSchedule(objectionId: string): ReviewSchedule | null {
 /**
  * Save review schedule
  */
-export function saveReviewSchedule(schedule: ReviewSchedule): void {
+export async function saveReviewSchedule(schedule: ReviewSchedule): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/review-schedules', { schedule });
+      invalidateStatsCache(); // Invalidate cache when review schedule is updated
+      return;
+    } catch (error) {
+      console.error('Error saving review schedule to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem('objections-app-review-schedules');
     const schedules: ReviewSchedule[] = stored ? JSON.parse(stored) : [];
@@ -146,6 +177,7 @@ export function saveReviewSchedule(schedule: ReviewSchedule): void {
     }
 
     localStorage.setItem('objections-app-review-schedules', JSON.stringify(schedules));
+    invalidateStatsCache(); // Invalidate cache when review schedule is updated
   } catch (error) {
     console.error('Error saving review schedule:', error);
   }
@@ -154,25 +186,31 @@ export function saveReviewSchedule(schedule: ReviewSchedule): void {
 /**
  * Record a review session and update schedule
  */
-export function recordReview(objectionId: string, confidenceRating: number): void {
-  // Convert confidence rating (1-5) to quality (0-5)
-  // 1-2 stars = quality 1-2 (needs work)
-  // 3 stars = quality 3 (okay)
-  // 4-5 stars = quality 4-5 (good/excellent)
-  // Map: 1→1, 2→2, 3→3, 4→4, 5→5 (direct mapping)
+export async function recordReview(objectionId: string, confidenceRating: number): Promise<void> {
   const quality = Math.max(1, Math.min(5, confidenceRating));
 
-  const currentSchedule = getReviewSchedule(objectionId);
+  const currentSchedule = await getReviewSchedule(objectionId);
   const newSchedule = calculateNextReview(objectionId, quality, currentSchedule);
-  saveReviewSchedule(newSchedule);
+  await saveReviewSchedule(newSchedule);
 }
 
 /**
  * Get all objections that are due for review
  */
-export function getDueForReview(): string[] {
+export async function getDueForReview(): Promise<string[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/review-schedules', { dueOnly: 'true' });
+      return (data.schedules || []).map((s: ReviewSchedule) => s.objectionId);
+    } catch (error) {
+      console.error('Error getting due reviews from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem('objections-app-review-schedules');
     if (!stored) return [];
@@ -192,9 +230,20 @@ export function getDueForReview(): string[] {
 /**
  * Get all review schedules
  */
-export function getAllReviewSchedules(): ReviewSchedule[] {
+export async function getAllReviewSchedules(): Promise<ReviewSchedule[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/review-schedules');
+      return data.schedules || [];
+    } catch (error) {
+      console.error('Error getting review schedules from API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem('objections-app-review-schedules');
     if (!stored) return [];
@@ -215,8 +264,8 @@ export function getAllReviewSchedules(): ReviewSchedule[] {
 /**
  * Get review statistics
  */
-export function getReviewStats() {
-  const schedules = getAllReviewSchedules();
+export async function getReviewStats() {
+  const schedules = await getAllReviewSchedules();
   const due = schedules.filter(s => s.isDue);
   const upcoming = schedules.filter(s => {
     const daysUntil = Math.ceil(
@@ -237,4 +286,3 @@ export function getReviewStats() {
       : 0,
   };
 }
-

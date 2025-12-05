@@ -58,9 +58,9 @@ export default function ErrorRecoveryDialog({
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     try {
-      const data = exportAllData();
+      const data = await exportAllData();
       const filename = `response-ready-backup-${new Date().toISOString().split('T')[0]}.json`;
       downloadJSON(data, filename);
     } catch (exportError) {

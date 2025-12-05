@@ -40,7 +40,7 @@ import {
 
 export default function VoiceSessionHistory() {
   const [sessions, setSessions] = useState<VoiceSession[]>([]);
-  const [stats, setStats] = useState(getVoiceSessionStats());
+  const [stats, setStats] = useState<any>({ totalSessions: 0, totalDuration: 0, totalMessages: 0, averageSessionDuration: 0 });
   const [selectedSession, setSelectedSession] = useState<VoiceSession | null>(null);
   const [sortBy, setSortBy] = useState<'date' | 'duration' | 'messages'>('date');
   const [showExportMenu, setShowExportMenu] = useState<string | null>(null);
@@ -59,8 +59,11 @@ export default function VoiceSessionHistory() {
     return () => clearInterval(interval);
   }, []);
 
-  const loadSessions = () => {
-    const allSessions = getVoiceSessions();
+  const loadSessions = async () => {
+    const [allSessions, sessionStats] = await Promise.all([
+      getVoiceSessions(),
+      getVoiceSessionStats(),
+    ]);
     const sorted = [...allSessions].sort((a, b) => {
       switch (sortBy) {
         case 'date':
@@ -74,12 +77,12 @@ export default function VoiceSessionHistory() {
       }
     });
     setSessions(sorted);
-    setStats(getVoiceSessionStats());
+    setStats(sessionStats);
   };
 
-  const handleDelete = (sessionId: string) => {
+  const handleDelete = async (sessionId: string) => {
     if (confirm('Are you sure you want to delete this session?')) {
-      deleteVoiceSession(sessionId);
+      await deleteVoiceSession(sessionId);
       if (selectedSession?.id === sessionId) {
         setSelectedSession(null);
       }
@@ -111,13 +114,13 @@ export default function VoiceSessionHistory() {
     setShowExportMenu(null);
   };
 
-  const handleExportAll = (format: 'json' | 'csv') => {
+  const handleExportAll = async (format: 'json' | 'csv') => {
     switch (format) {
       case 'json':
-        exportAllVoiceSessionsJSON();
+        await exportAllVoiceSessionsJSON();
         break;
       case 'csv':
-        exportAllVoiceSessionsCSV();
+        await exportAllVoiceSessionsCSV();
         break;
     }
   };

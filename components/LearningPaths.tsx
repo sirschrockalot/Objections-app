@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { LearningPath } from '@/types';
+import type { LearningPath, LearningPathProgress } from '@/types';
 import { getAllLearningPaths, getBeginnerPath, getCategoryMasteryPaths, hasCompletedPrerequisites } from '@/data/learningPaths';
 import {
   getPathProgress,
@@ -23,36 +23,74 @@ interface LearningPathsProps {
   onStartPath?: (pathId: string) => void;
 }
 
+interface PathProgressData {
+  progress: LearningPathProgress | null;
+  completed: boolean;
+  percentage: number;
+}
+
 export default function LearningPaths({ onSelectObjection, onStartPath }: LearningPathsProps) {
   const [paths, setPaths] = useState<LearningPath[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [dailyChallenge, setDailyChallenge] = useState<any>(null);
   const [completedPaths, setCompletedPaths] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'paths' | 'challenge'>('paths');
+  const [objections, setObjections] = useState<any[]>([]);
+  const [pathProgressData, setPathProgressData] = useState<Map<string, PathProgressData>>(new Map());
 
   useEffect(() => {
-    const allPaths = getAllLearningPaths();
-    setPaths(allPaths);
-    
-    const challenge = getDailyChallenge();
-    setDailyChallenge(challenge);
-    
-    const completed = getCompletedPaths();
-    setCompletedPaths(completed);
+    const loadData = async () => {
+      const allPaths = getAllLearningPaths();
+      setPaths(allPaths);
+      
+      const challenge = getDailyChallenge();
+      setDailyChallenge(challenge);
+      
+      const [completed, obj] = await Promise.all([
+        getCompletedPaths(),
+        getObjections(),
+      ]);
+      setCompletedPaths(completed);
+      setObjections(obj);
+
+      // Load progress for all paths
+      const progressMap = new Map<string, PathProgressData>();
+      for (const path of allPaths) {
+        const [progress, completed, percentage] = await Promise.all([
+          getPathProgress(path.id),
+          isPathCompleted(path.id),
+          getPathCompletionPercentage(path.id),
+        ]);
+        progressMap.set(path.id, { progress, completed, percentage });
+      }
+      setPathProgressData(progressMap);
+    };
+    loadData();
   }, []);
 
-  const handleStartPath = (pathId: string) => {
-    startLearningPath(pathId);
+  const handleStartPath = async (pathId: string) => {
+    await startLearningPath(pathId);
+    // Reload progress for this path
+    const [progress, completed, percentage] = await Promise.all([
+      getPathProgress(pathId),
+      isPathCompleted(pathId),
+      getPathCompletionPercentage(pathId),
+    ]);
+    setPathProgressData(prev => {
+      const newMap = new Map(prev);
+      newMap.set(pathId, { progress, completed, percentage });
+      return newMap;
+    });
     if (onStartPath) {
       onStartPath(pathId);
     }
     setSelectedPath(pathId);
   };
 
-  const handlePracticeCurrent = (pathId: string) => {
+  const handlePracticeCurrent = async (pathId: string) => {
     const { getLearningPathById } = require('@/data/learningPaths');
     const path = getLearningPathById(pathId);
-    const progress = getPathProgress(pathId);
+    const progress = await getPathProgress(pathId);
     
     if (path && progress) {
       const currentObjectionId = path.objections[progress.currentStep];
@@ -68,7 +106,9 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
     advanced: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   };
 
-  const objections = getObjections();
+  const getPathData = (pathId: string): PathProgressData => {
+    return pathProgressData.get(pathId) || { progress: null, completed: false, percentage: 0 };
+  };
 
   return (
     <div className="space-y-6">
@@ -136,7 +176,7 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
                   >
                     <p className="text-sm text-gray-900 dark:text-white">"{objection.text}"</p>
                     <span className={`text-xs px-2 py-1 rounded-full mt-2 inline-block ${
-                      difficultyColors[objection.difficulty || 'beginner']
+                      difficultyColors[objection.difficulty as keyof typeof difficultyColors || 'beginner']
                     }`}>
                       {objection.difficulty || 'beginner'}
                     </span>
@@ -169,9 +209,8 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
             </h3>
             {(() => {
               const beginner = getBeginnerPath();
-              const progress = getPathProgress(beginner.id);
-              const completed = isPathCompleted(beginner.id);
-              const percentage = getPathCompletionPercentage(beginner.id);
+              const pathData = getPathData(beginner.id);
+              const { progress, completed, percentage } = pathData;
               const canStart = hasCompletedPrerequisites(beginner.id, completedPaths);
 
               return (
@@ -286,9 +325,8 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {getCategoryMasteryPaths().map((path) => {
-                const progress = getPathProgress(path.id);
-                const completed = isPathCompleted(path.id);
-                const percentage = getPathCompletionPercentage(path.id);
+                const pathData = getPathData(path.id);
+                const { progress, completed, percentage } = pathData;
                 const canStart = hasCompletedPrerequisites(path.id, completedPaths);
 
                 return (
@@ -369,4 +407,3 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
     </div>
   );
 }
-

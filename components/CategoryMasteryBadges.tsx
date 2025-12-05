@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getCategoryMastery } from '@/lib/gamification';
+import { getAllStats } from '@/lib/storage';
 import { CategoryMastery } from '@/types';
 import { Award, Trophy, Star, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -26,9 +26,16 @@ export default function CategoryMasteryBadges() {
   const [mastery, setMastery] = useState<CategoryMastery[]>([]);
 
   useEffect(() => {
-    const loadMastery = () => {
+    const loadMastery = async () => {
       try {
-        const newMastery = getCategoryMastery();
+        // Use the batched stats API instead of individual calls
+        const allStats = await getAllStats();
+        // Convert API response to CategoryMastery format (badgeEarned: null -> undefined)
+        const newMastery: CategoryMastery[] = allStats.categoryMastery.map(m => ({
+          ...m,
+          badgeEarned: m.badgeEarned || undefined,
+        }));
+        
         setMastery(prev => {
           // Only update if mastery data actually changed
           if (prev.length !== newMastery.length) return newMastery;
@@ -52,8 +59,8 @@ export default function CategoryMasteryBadges() {
     };
     
     loadMastery();
-    // Only refresh every 10 seconds to prevent loops
-    const interval = setInterval(loadMastery, 10000);
+    // Only refresh every 30 seconds (reduced frequency since we're batching)
+    const interval = setInterval(loadMastery, 30000);
     return () => clearInterval(interval);
   }, []);
 

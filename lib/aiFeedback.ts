@@ -85,7 +85,7 @@ export async function analyzeSessionWithAI(session: VoiceSession): Promise<AIFee
     .join('\n');
 
   // Get objections data for context
-  const objections = getObjections();
+  const objections = await getObjections();
   const objectionsContext = objections
     .map((obj) => `- ${obj.text}`)
     .slice(0, 10) // Limit to first 10 for context

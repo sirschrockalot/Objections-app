@@ -11,8 +11,9 @@ export default function Achievements() {
   const [showUnlockedOnly, setShowUnlockedOnly] = useState(false);
 
   useEffect(() => {
-    const loadAchievements = () => {
-      setAchievements(checkAchievements());
+    const loadAchievements = async () => {
+      const achievements = await checkAchievements();
+      setAchievements(achievements);
     };
 
     loadAchievements();

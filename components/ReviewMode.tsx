@@ -21,34 +21,57 @@ interface ReviewModeProps {
 }
 
 export default function ReviewMode({ onSelectObjection }: ReviewModeProps) {
-  const [allObjections] = useState<Objection[]>(getObjections());
-  const [practiceHistory] = useState<PracticeHistoryEntry[]>(getPracticeHistory());
+  const [allObjections, setAllObjections] = useState<Objection[]>([]);
+  const [practiceHistory, setPracticeHistory] = useState<PracticeHistoryEntry[]>([]);
+  const [practicedObjections, setPracticedObjections] = useState<Array<{
+    objection: Objection;
+    history: PracticeHistoryEntry[];
+    firstDate: string | null;
+    lastDate: string | null;
+    practiceCount: number;
+    improvement: { trend: 'improving' | 'declining' | 'stable'; average: number } | null;
+  }>>([]);
   const [selectedDateRange, setSelectedDateRange] = useState<'all' | 'week' | 'month' | 'custom'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'most-practiced' | 'least-practiced'>('recent');
 
-  // Get all practiced objections with their history
-  const practicedObjections = useMemo(() => {
-    const practicedIds = new Set(practiceHistory.map(entry => entry.objectionId));
-    return allObjections
-      .filter(obj => practicedIds.has(obj.id))
-      .map(obj => {
-        const history = getObjectionPracticeHistory(obj.id);
-        const firstDate = getObjectionFirstPracticedDate(obj.id);
-        const lastDate = getObjectionLastPracticedDate(obj.id);
-        const practiceCount = getObjectionPracticeCount(obj.id);
-        const improvement = getConfidenceImprovement(obj.id);
-        
-        return {
-          objection: obj,
-          history,
-          firstDate,
-          lastDate,
-          practiceCount,
-          improvement,
-        };
-      });
-  }, [allObjections, practiceHistory]);
+  useEffect(() => {
+    const loadData = async () => {
+      const [objections, history] = await Promise.all([
+        getObjections(),
+        getPracticeHistory(),
+      ]);
+      setAllObjections(objections);
+      setPracticeHistory(history);
+
+      // Get all practiced objections with their history
+      const practicedIds = new Set(history.map(entry => entry.objectionId));
+      const practiced = await Promise.all(
+        objections
+          .filter(obj => practicedIds.has(obj.id))
+          .map(async (obj) => {
+            const [objHistory, firstDate, lastDate, practiceCount, improvement] = await Promise.all([
+              getObjectionPracticeHistory(obj.id),
+              getObjectionFirstPracticedDate(obj.id),
+              getObjectionLastPracticedDate(obj.id),
+              getObjectionPracticeCount(obj.id),
+              getConfidenceImprovement(obj.id),
+            ]);
+            
+            return {
+              objection: obj,
+              history: objHistory,
+              firstDate,
+              lastDate,
+              practiceCount,
+              improvement,
+            };
+          })
+      );
+      setPracticedObjections(practiced);
+    };
+    loadData();
+  }, []);
 
   // Filter by date range
   const filteredObjections = useMemo(() => {

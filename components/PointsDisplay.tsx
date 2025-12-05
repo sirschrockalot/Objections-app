@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { getTotalPoints, getUserLevel, getPointsHistory } from '@/lib/gamification';
+import { useEffect, useState } from 'react';
+import { getAllStats } from '@/lib/storage';
 import { UserLevel } from '@/types';
 import { Trophy, Star, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -12,36 +12,34 @@ export default function PointsDisplay() {
   const [recentPoints, setRecentPoints] = useState(0);
 
   useEffect(() => {
-    const updatePoints = () => {
+    const updatePoints = async () => {
       try {
-        const points = getTotalPoints();
-        const level = getUserLevel();
-        const history = getPointsHistory(5);
-        const recent = history.slice(0, 5).reduce((sum, entry) => sum + entry.points, 0);
+        // Use the batched stats API instead of individual calls
+        const allStats = await getAllStats();
 
         setTotalPoints(prev => {
-          if (prev === points) return prev;
-          return points;
+          if (prev === allStats.totalPoints) return prev;
+          return allStats.totalPoints;
         });
         
         setUserLevel(prev => {
-          if (!prev) return level;
+          if (!prev) return allStats.userLevel;
           // Compare key properties instead of object reference
           if (
-            prev.level === level.level &&
-            prev.levelName === level.levelName &&
-            prev.totalPoints === level.totalPoints &&
-            prev.pointsToNextLevel === level.pointsToNextLevel &&
-            prev.currentLevelPoints === level.currentLevelPoints
+            prev.level === allStats.userLevel.level &&
+            prev.levelName === allStats.userLevel.levelName &&
+            prev.totalPoints === allStats.userLevel.totalPoints &&
+            prev.pointsToNextLevel === allStats.userLevel.pointsToNextLevel &&
+            prev.currentLevelPoints === allStats.userLevel.currentLevelPoints
           ) {
             return prev;
           }
-          return level;
+          return allStats.userLevel;
         });
         
         setRecentPoints(prev => {
-          if (prev === recent) return prev;
-          return recent;
+          if (prev === allStats.recentPoints) return prev;
+          return allStats.recentPoints;
         });
       } catch (error) {
         console.error('Error updating points:', error);
@@ -49,8 +47,8 @@ export default function PointsDisplay() {
     };
 
     updatePoints();
-    // Refresh points every 10 seconds (further reduced to prevent loops)
-    const interval = setInterval(updatePoints, 10000);
+    // Refresh points every 30 seconds (reduced frequency since we're batching)
+    const interval = setInterval(updatePoints, 30000);
     return () => clearInterval(interval);
   }, []);
 

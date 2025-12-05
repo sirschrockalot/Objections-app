@@ -5,10 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import {
-  getTotalSessions,
-  getTotalObjectionsPracticed,
-  getPracticeStreak,
-  getCategoryStats,
+  getAllStats,
   getObjections,
 } from '@/lib/storage';
 import { Trophy, Target, Flame, TrendingUp, BarChart3 } from 'lucide-react';
@@ -41,39 +38,37 @@ export default function StatsDashboard({ onSelectObjection }: StatsDashboardProp
   });
 
   useEffect(() => {
-    const loadStats = () => {
+    const loadStats = async () => {
       try {
-        const totalSessions = getTotalSessions();
-        const totalObjections = getTotalObjectionsPracticed();
-        const streak = getPracticeStreak();
-        const categoryStats = getCategoryStats();
+        // Single API call to get all stats at once
+        const allStats = await getAllStats();
         
         setStats(prev => {
           // Only update if values actually changed - use deep comparison for categoryStats
           const categoryStatsChanged = 
-            Object.keys(prev.categoryStats).length !== Object.keys(categoryStats).length ||
-            Object.keys(categoryStats).some(key => {
+            Object.keys(prev.categoryStats).length !== Object.keys(allStats.categoryStats).length ||
+            Object.keys(allStats.categoryStats).some(key => {
               const prevStat = prev.categoryStats[key];
-              const newStat = categoryStats[key];
+              const newStat = allStats.categoryStats[key];
               return !prevStat || 
                      prevStat.practiced !== newStat.practiced || 
                      prevStat.total !== newStat.total;
             });
           
           if (
-            prev.totalSessions === totalSessions &&
-            prev.totalObjections === totalObjections &&
-            prev.streak === streak &&
+            prev.totalSessions === allStats.totalSessions &&
+            prev.totalObjections === allStats.totalObjectionsPracticed &&
+            prev.streak === allStats.streak &&
             !categoryStatsChanged
           ) {
             return prev; // No changes, return previous state
           }
           
           return {
-            totalSessions,
-            totalObjections,
-            streak,
-            categoryStats,
+            totalSessions: allStats.totalSessions,
+            totalObjections: allStats.totalObjectionsPracticed,
+            streak: allStats.streak,
+            categoryStats: allStats.categoryStats,
           };
         });
       } catch (error) {
@@ -82,15 +77,22 @@ export default function StatsDashboard({ onSelectObjection }: StatsDashboardProp
     };
 
     loadStats();
-    // Refresh stats every 10 seconds (further reduced to prevent loops)
-    const interval = setInterval(loadStats, 10000);
+    // Refresh stats every 30 seconds (reduced frequency since we're batching)
+    const interval = setInterval(loadStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const totalObjections = getObjections().length;
+  const [totalObjections, setTotalObjections] = useState(0);
   const overallProgress = totalObjections > 0 
     ? Math.round((stats.totalObjections / totalObjections) * 100) 
     : 0;
+
+  useEffect(() => {
+    // Get total objections count - can be cached or use initialObjections length
+    getObjections().then(objections => {
+      setTotalObjections(objections.length);
+    });
+  }, []);
 
   const categoryColors: Record<string, string> = {
     'Price': 'bg-red-500',

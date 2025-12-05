@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Objection, Response, PracticeSession } from '@/types';
 import { 
-  getObjections, 
+  getObjections,
+  getObjectionsSync,
   saveCustomResponse, 
   savePracticeSession,
   getObjectionsNeedingPractice,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/storage';
 import { addPoints, POINTS_VALUES } from '@/lib/gamification';
 import { getDueForReview, recordReview, getAllReviewSchedules } from '@/lib/spacedRepetition';
+import { getCurrentPathObjection, completePathStep, isPathCompleted } from '@/lib/learningPaths';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,7 +27,6 @@ import SwipeablePracticeView from '@/components/SwipeablePracticeView';
 import ScenarioPractice from '@/components/ScenarioPractice';
 import { practiceScenarios, getScenariosByDifficulty } from '@/data/scenarios';
 import LearningPaths from '@/components/LearningPaths';
-import { getCurrentPathObjection, completePathStep, isPathCompleted } from '@/lib/learningPaths';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import DailyTip from '@/components/DailyTip';
@@ -38,6 +39,9 @@ import { Search, Filter, X, Keyboard, Mic } from 'lucide-react';
 import OnboardingTour from '@/components/OnboardingTour';
 import { getMainAppOnboardingSteps } from '@/lib/onboarding';
 import WelcomeScreen from '@/components/WelcomeScreen';
+import UserMenu from '@/components/UserMenu';
+import { getCurrentUserId, trackUserActivity } from '@/lib/auth';
+import AuthGuard from '@/components/AuthGuard';
 
 type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
@@ -70,28 +74,52 @@ export default function Home() {
   const objectionCardRef = useRef<{ revealResponses?: () => void; addResponse?: () => void } | null>(null);
 
   useEffect(() => {
-    const objections = getObjections();
-    setAllObjections(objections);
-    setFilteredObjections(objections);
+    let isMounted = true;
     
-    // Initialize previous achievements
-    const initialAchievements = checkAchievements();
-    previousAchievements.current = new Set(
-      initialAchievements.filter(a => a.unlocked).map(a => a.id)
-    );
-    
-    // Check if welcome screen should be shown
-    import('@/lib/onboarding').then(({ isOnboardingCompleted }) => {
-      if (!isOnboardingCompleted()) {
-        // Show welcome screen first, then onboarding tour
-        setTimeout(() => {
-          setShowWelcome(true);
-        }, 300);
+    const loadInitialData = async () => {
+      try {
+        const objections = await getObjections();
+        if (isMounted) {
+          setAllObjections(objections);
+          setFilteredObjections(objections);
+        }
+
+        const initialAchievements = await checkAchievements();
+        if (isMounted) {
+          previousAchievements.current = new Set(
+            initialAchievements.filter(a => a.unlocked).map(a => a.id)
+          );
+        }
+
+        const userId = getCurrentUserId();
+        if (userId) {
+          void trackUserActivity(userId, 'page_view', { page: 'home' });
+        }
+
+        const { isOnboardingCompleted } = await import('@/lib/onboarding');
+        if (isMounted && !isOnboardingCompleted()) {
+          setTimeout(() => {
+            if (isMounted) {
+              setShowWelcome(true);
+            }
+          }, 300);
+        }
+      } catch (error) {
+        console.error('Error loading initial data:', error);
       }
-    });
+    };
+    
+    void loadInitialData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
+    // Skip if allObjections is empty (still loading)
+    if (allObjections.length === 0) return;
+
     let filtered = [...allObjections];
 
     // Apply search filter
@@ -107,20 +135,35 @@ export default function Home() {
       filtered = filtered.filter(obj => obj.category === selectedCategory);
     }
 
-    // Apply practice mode filter
+    // Apply practice mode filter (async - will update when data loads)
     if (practiceMode === 'weakness') {
-      const needsPractice = getObjectionsNeedingPractice(3);
-      filtered = filtered.filter(obj => needsPractice.includes(obj.id));
+      getObjectionsNeedingPractice(3).then(needsPractice => {
+        setFilteredObjections(prev => {
+          const updated = getObjectionsSync();
+          const filtered = updated.filter(obj => needsPractice.includes(obj.id));
+          if (prev.length !== filtered.length) return filtered;
+          const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+          return idsChanged ? filtered : prev;
+        });
+      });
+      return; // Early return, will update via promise
     } else if (practiceMode === 'spaced') {
-      const dueForReview = getDueForReview();
-      if (dueForReview.length === 0) {
-        // If no reviews are due, show all scheduled objections
-        const allSchedules = getAllReviewSchedules();
-        const scheduledIds = allSchedules.map(s => s.objectionId);
-        filtered = filtered.filter(obj => scheduledIds.includes(obj.id));
-      } else {
-        filtered = filtered.filter(obj => dueForReview.includes(obj.id));
-      }
+      Promise.all([getDueForReview(), getAllReviewSchedules()]).then(([dueForReview, allSchedules]) => {
+        setFilteredObjections(prev => {
+          const updated = getObjectionsSync();
+          let filtered;
+          if (dueForReview.length === 0) {
+            const scheduledIds = allSchedules.map(s => s.objectionId);
+            filtered = updated.filter(obj => scheduledIds.includes(obj.id));
+          } else {
+            filtered = updated.filter(obj => dueForReview.includes(obj.id));
+          }
+          if (prev.length !== filtered.length) return filtered;
+          const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+          return idsChanged ? filtered : prev;
+        });
+      });
+      return; // Early return, will update via promise
     }
 
     // Only update if filtered list actually changed
@@ -138,6 +181,12 @@ export default function Home() {
   };
 
   const handleGetObjection = () => {
+    // Track user activity
+    const userId = getCurrentUserId();
+    if (userId) {
+      void trackUserActivity(userId, 'get_objection', { practiceMode });
+    }
+    
     const available = getAvailableObjections();
     if (available.length === 0) {
       alert('No objections match your current filters. Please adjust your search or filters.');
@@ -167,18 +216,19 @@ export default function Home() {
     
     // Record practice history
     if (currentSessionId.current) {
-      const latestRating = getLatestConfidenceRating(selectedObjection.id);
-      recordPracticeHistory(selectedObjection.id, currentSessionId.current, latestRating || undefined);
-      
-      // Update spaced repetition schedule if rating exists
-      if (latestRating) {
-        recordReview(selectedObjection.id, latestRating);
-      }
+      getLatestConfidenceRating(selectedObjection.id).then(latestRating => {
+        if (latestRating) {
+          recordPracticeHistory(selectedObjection.id, currentSessionId.current!, latestRating);
+          recordReview(selectedObjection.id, latestRating);
+        } else {
+          recordPracticeHistory(selectedObjection.id, currentSessionId.current!, undefined);
+        }
+      });
     }
   };
 
-  const checkForNewAchievements = () => {
-    const currentAchievements = checkAchievements();
+  const checkForNewAchievements = async () => {
+    const currentAchievements = await checkAchievements();
     const currentUnlocked = new Set(currentAchievements.filter(a => a.unlocked).map(a => a.id));
     
     // Check for new achievements
@@ -207,7 +257,7 @@ export default function Home() {
     previousAchievements.current = currentUnlocked;
   };
 
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
     if (sessionStartTime.current !== null) {
       const duration = practiceMode === 'challenge' && challengeTimeUsed > 0 
         ? challengeTimeUsed 
@@ -221,7 +271,7 @@ export default function Home() {
         timeLimit: challengeConfig?.timeLimit,
         goal: challengeConfig?.goal,
       };
-      savePracticeSession(session);
+      await savePracticeSession(session);
       
       // Award points for session
       try {
@@ -249,7 +299,13 @@ export default function Home() {
     setCurrentObjection(null);
   };
 
-  const handleAddResponse = (objectionId: string, responseText: string) => {
+  const handleAddResponse = async (objectionId: string, responseText: string) => {
+    // Track user activity
+    const userId = getCurrentUserId();
+    if (userId) {
+      void trackUserActivity(userId, 'add_response', { objectionId });
+    }
+    
     const newResponse: Response = {
       id: `${objectionId}-custom-${Date.now()}`,
       text: responseText,
@@ -257,7 +313,7 @@ export default function Home() {
       createdAt: new Date().toISOString(),
     };
 
-    saveCustomResponse(objectionId, newResponse);
+    await saveCustomResponse(objectionId, newResponse);
 
     // Award points for adding custom response
     try {
@@ -269,69 +325,66 @@ export default function Home() {
     }
 
     // Update local state - only update if objection actually changed
-    setAllObjections(prev => {
-      const updated = getObjections();
-      // Check if any objections actually changed
-      if (prev.length !== updated.length) return updated;
-      const changed = prev.some((p, i) => {
-        const u = updated[i];
-        if (!u || p.id !== u.id) return true;
-        // Check if custom responses changed
-        if (p.customResponses.length !== u.customResponses.length) return true;
-        return false;
+    getObjections().then(updated => {
+      setAllObjections(prev => {
+        // Check if any objections actually changed
+        if (prev.length !== updated.length) return updated;
+        const changed = prev.some((p, i) => {
+          const u = updated[i];
+          if (!u || p.id !== u.id) return true;
+          // Check if custom responses changed
+          if (p.customResponses.length !== u.customResponses.length) return true;
+          return false;
+        });
+        return changed ? updated : prev;
       });
-      return changed ? updated : prev;
-    });
-    
-    setCurrentObjection((prev) => {
+      
+      setCurrentObjection((prev) => {
       if (!prev || prev.id !== objectionId) return prev;
       return {
         ...prev,
         customResponses: [...prev.customResponses, newResponse],
       };
+      });
     });
   };
 
   const handleRatingChange = () => {
     // Update practice history with new rating if in a session
     if (currentObjection && currentSessionId.current) {
-      const latestRating = getLatestConfidenceRating(currentObjection.id);
-      if (latestRating) {
-        recordPracticeHistory(currentObjection.id, currentSessionId.current, latestRating);
-        // Update spaced repetition schedule
-        recordReview(currentObjection.id, latestRating);
-        
-        // Update learning path progress if in a path
-        if (selectedLearningPath) {
-          completePathStep(selectedLearningPath, currentObjection.id);
+      getLatestConfidenceRating(currentObjection.id).then(latestRating => {
+        if (latestRating) {
+          recordPracticeHistory(currentObjection.id, currentSessionId.current!, latestRating);
+          recordReview(currentObjection.id, latestRating);
+          
+          // Update learning path progress if in a path
+          if (selectedLearningPath) {
+            completePathStep(selectedLearningPath, currentObjection.id);
+          }
         }
-      }
+      });
     }
     
     // Only refresh objections if in weakness mode (needs practice filter)
-    // Use a ref to track if we need to update to prevent loops
     if (practiceMode === 'weakness') {
-      // Force a re-filter by updating filteredObjections directly
-      // This avoids updating allObjections which would trigger the filter useEffect
-      const needsPractice = getObjectionsNeedingPractice(3);
-      setFilteredObjections(prev => {
-        const updated = getObjections();
-        const filtered = updated.filter(obj => needsPractice.includes(obj.id));
-        // Only update if filtered list changed
-        if (prev.length !== filtered.length) return filtered;
-        const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
-        return idsChanged ? filtered : prev;
+      getObjectionsNeedingPractice(3).then(needsPractice => {
+        setFilteredObjections(prev => {
+          const updated = getObjectionsSync();
+          const filtered = updated.filter(obj => needsPractice.includes(obj.id));
+          if (prev.length !== filtered.length) return filtered;
+          const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+          return idsChanged ? filtered : prev;
+        });
       });
     } else if (practiceMode === 'spaced') {
-      // Update filtered list for spaced repetition mode
-      const dueForReview = getDueForReview();
-      setFilteredObjections(prev => {
-        const updated = getObjections();
-        const filtered = updated.filter(obj => dueForReview.includes(obj.id));
-        // Only update if filtered list changed
-        if (prev.length !== filtered.length) return filtered;
-        const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
-        return idsChanged ? filtered : prev;
+      getDueForReview().then(dueForReview => {
+        setFilteredObjections(prev => {
+          const updated = getObjectionsSync();
+          const filtered = updated.filter(obj => dueForReview.includes(obj.id));
+          if (prev.length !== filtered.length) return filtered;
+          const idsChanged = prev.some((p, i) => p.id !== filtered[i]?.id);
+          return idsChanged ? filtered : prev;
+        });
       });
     }
   };
@@ -372,8 +425,9 @@ export default function Home() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="container mx-auto px-4 py-12">
+    <AuthGuard>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="container mx-auto px-4 py-12">
         <header className="text-center mb-12">
           <div className="flex items-center justify-end gap-2 mb-4">
             <Button
@@ -385,6 +439,7 @@ export default function Home() {
             >
               <Keyboard className="h-5 w-5" />
             </Button>
+            <UserMenu />
             <ThemeToggle />
           </div>
           <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
@@ -768,9 +823,9 @@ export default function Home() {
                     setIsLoading(false);
                   }
                 }}
-                onStartPath={(pathId) => {
+                onStartPath={async (pathId) => {
                   setSelectedLearningPath(pathId);
-                  const currentObjectionId = getCurrentPathObjection(pathId);
+                  const currentObjectionId = await getCurrentPathObjection(pathId);
                   if (currentObjectionId) {
                     const objection = allObjections.find(o => o.id === currentObjectionId);
                     if (objection) {
@@ -958,8 +1013,9 @@ export default function Home() {
                 }}
                 onAddResponse={handleAddResponse}
                 onRatingChange={handleRatingChange}
-                onUpvote={() => {
-                  const updated = getObjections();
+                onUpvote={async () => {
+                  // Upvote is handled in ObjectionCard, just refresh data
+                  const updated = await getObjections();
                   setAllObjections(prev => {
                     // Only update if upvotes actually changed
                     const changed = prev.some((p, i) => {
@@ -990,12 +1046,13 @@ export default function Home() {
                     });
                   }
                 }}
-                    onNextObjection={() => {
+                    onNextObjection={async () => {
                       // If in learning path mode, advance to next step
                       if (selectedLearningPath && currentObjection) {
-                        completePathStep(selectedLearningPath, currentObjection.id);
+                        await completePathStep(selectedLearningPath, currentObjection.id);
                         // Check if path is completed
-                        if (isPathCompleted(selectedLearningPath)) {
+                        const completed = await isPathCompleted(selectedLearningPath);
+                        if (completed) {
                           alert('Congratulations! You completed the learning path!');
                           setSelectedLearningPath(null);
                           setPracticeMode('random');
@@ -1061,6 +1118,7 @@ export default function Home() {
           showSkip={true}
         />
       )}
-    </div>
+      </div>
+    </AuthGuard>
   );
 }

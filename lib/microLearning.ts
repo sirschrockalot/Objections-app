@@ -6,7 +6,7 @@ const OBJECTION_OF_THE_DAY_KEY = 'objections-app-objection-of-day';
 /**
  * Get or set objection of the day
  */
-export function getObjectionOfTheDay(): ObjectionOfTheDay | null {
+export async function getObjectionOfTheDay(): Promise<ObjectionOfTheDay | null> {
   if (typeof window === 'undefined') return null;
 
   try {
@@ -22,7 +22,7 @@ export function getObjectionOfTheDay(): ObjectionOfTheDay | null {
     }
 
     // Generate new objection of the day
-    const objections = getObjections();
+    const objections = await getObjections();
     if (objections.length === 0) return null;
 
     // Select objection based on day of year for consistency

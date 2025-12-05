@@ -111,8 +111,8 @@ export function exportVoiceSessionCSV(session: VoiceSession): void {
 /**
  * Export all voice sessions as JSON
  */
-export function exportAllVoiceSessionsJSON(): void {
-  const sessions = getVoiceSessions();
+export async function exportAllVoiceSessionsJSON(): Promise<void> {
+  const sessions = await getVoiceSessions();
   const dataStr = JSON.stringify(sessions, null, 2);
   const dataBlob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(dataBlob);
@@ -128,8 +128,8 @@ export function exportAllVoiceSessionsJSON(): void {
 /**
  * Export all voice sessions as CSV summary
  */
-export function exportAllVoiceSessionsCSV(): void {
-  const sessions = getVoiceSessions();
+export async function exportAllVoiceSessionsCSV(): Promise<void> {
+  const sessions = await getVoiceSessions();
   const lines: string[] = [];
   
   // Header

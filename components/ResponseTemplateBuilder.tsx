@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,11 +15,15 @@ interface ResponseTemplateBuilderProps {
 
 export default function ResponseTemplateBuilder({ onSelectTemplate, onClose }: ResponseTemplateBuilderProps) {
   const [showBuilder, setShowBuilder] = useState(false);
-  const [templates, setTemplates] = useState<ResponseTemplate[]>(getTemplates());
+  const [templates, setTemplates] = useState<ResponseTemplate[]>([]);
   const [currentTemplate, setCurrentTemplate] = useState<ResponseTemplate>(getDefaultTemplate());
   const [templateName, setTemplateName] = useState('');
 
-  const handleSaveTemplate = () => {
+  useEffect(() => {
+    getTemplates().then(setTemplates);
+  }, []);
+
+  const handleSaveTemplate = async () => {
     if (!templateName.trim()) {
       alert('Please enter a template name');
       return;
@@ -32,8 +36,9 @@ export default function ResponseTemplateBuilder({ onSelectTemplate, onClose }: R
       createdAt: new Date().toISOString(),
     };
 
-    saveTemplate(newTemplate);
-    setTemplates(getTemplates());
+    await saveTemplate(newTemplate);
+    const updatedTemplates = await getTemplates();
+    setTemplates(updatedTemplates);
     setShowBuilder(false);
     setTemplateName('');
     setCurrentTemplate(getDefaultTemplate());

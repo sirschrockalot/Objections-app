@@ -71,7 +71,7 @@ export default function StorageQuotaWarning({
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = exportAllData();
+      const data = await exportAllData();
       const filename = `response-ready-backup-${new Date().toISOString().split('T')[0]}.json`;
       downloadJSON(data, filename);
     } catch (error) {

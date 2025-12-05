@@ -92,8 +92,9 @@ function getDayOfWeek(dateString: string): string {
 /**
  * Calculate comprehensive analytics from voice sessions
  */
-export function calculateVoiceAnalytics(): VoiceAnalytics {
-  const sessions = getVoiceSessions().filter(s => s.status === 'completed');
+export async function calculateVoiceAnalytics(): Promise<VoiceAnalytics> {
+  const allSessions = await getVoiceSessions();
+  const sessions = allSessions.filter(s => s.status === 'completed');
   
   if (sessions.length === 0) {
     return {
@@ -285,11 +286,11 @@ export function calculateVoiceAnalytics(): VoiceAnalytics {
 /**
  * Get analytics summary for quick display
  */
-export function getAnalyticsSummary(): {
+export async function getAnalyticsSummary(): Promise<{
   keyMetrics: Array<{ label: string; value: string; trend?: string }>;
   insights: string[];
-} {
-  const analytics = calculateVoiceAnalytics();
+}> {
+  const analytics = await calculateVoiceAnalytics();
 
   const keyMetrics = [
     {

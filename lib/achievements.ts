@@ -9,12 +9,14 @@ export interface Achievement {
   unlockedAt?: string;
 }
 
-export function checkAchievements(): Achievement[] {
-  const totalSessions = getTotalSessions();
-  const totalObjections = getTotalObjectionsPracticed();
-  const streak = getPracticeStreak();
-  const allObjections = getObjections();
-  const ratings = getConfidenceRatings();
+export async function checkAchievements(): Promise<Achievement[]> {
+  const [totalSessions, totalObjections, streak, allObjections, ratings] = await Promise.all([
+    getTotalSessions(),
+    getTotalObjectionsPracticed(),
+    getPracticeStreak(),
+    getObjections(),
+    getConfidenceRatings(),
+  ]);
   
   const achievements: Achievement[] = [
     {
@@ -110,11 +112,13 @@ export function checkAchievements(): Achievement[] {
   return achievements;
 }
 
-export function getUnlockedAchievements(): Achievement[] {
-  return checkAchievements().filter(a => a.unlocked);
+export async function getUnlockedAchievements(): Promise<Achievement[]> {
+  const achievements = await checkAchievements();
+  return achievements.filter(a => a.unlocked);
 }
 
-export function getLockedAchievements(): Achievement[] {
-  return checkAchievements().filter(a => !a.unlocked);
+export async function getLockedAchievements(): Promise<Achievement[]> {
+  const achievements = await checkAchievements();
+  return achievements.filter(a => !a.unlocked);
 }
 

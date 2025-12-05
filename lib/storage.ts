@@ -1,5 +1,7 @@
 import { Objection, Response, ConfidenceRating, PracticeSession, ObjectionNote, ResponseTemplate, PracticeHistoryEntry, Comment, PointsEntry, UserLevel, CategoryMastery } from '@/types';
 import { initialObjections } from '@/data/objections';
+import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
+import { getCurrentUserId, isAuthenticated } from './auth';
 
 const STORAGE_KEY = 'objections-app-data';
 const CONFIDENCE_RATINGS_KEY = 'objections-app-confidence-ratings';
@@ -9,9 +11,126 @@ const TEMPLATES_KEY = 'objections-app-templates';
 const PRACTICE_HISTORY_KEY = 'objections-app-practice-history';
 const COMMENTS_KEY = 'objections-app-comments';
 const POINTS_KEY = 'objections-app-points';
-const USER_ID_KEY = 'objections-app-user-id';
 
-export function getObjections(): Objection[] {
+// Cache for API responses
+const cache: {
+  customResponses: Map<string, Response[]>;
+  notes: Map<string, ObjectionNote>;
+  ratings: ConfidenceRating[];
+  sessions: PracticeSession[];
+  history: PracticeHistoryEntry[];
+  templates: ResponseTemplate[];
+} = {
+  customResponses: new Map(),
+  notes: new Map(),
+  ratings: [],
+  sessions: [],
+  history: [],
+  templates: [],
+};
+
+// Helper to check if we should use API
+function shouldUseAPI(): boolean {
+  return typeof window !== 'undefined' && isAuthenticated();
+}
+
+// Load custom responses from API or localStorage
+async function loadCustomResponses(objectionId?: string): Promise<Response[]> {
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/custom-responses', objectionId ? { objectionId } : {});
+      return data.responses || [];
+    } catch (error) {
+      console.error('Error loading custom responses from API:', error);
+      // Fall back to localStorage
+    }
+  }
+
+  // Fallback to localStorage
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const objection = parsed.find((o: Objection) => objectionId ? o.id === objectionId : true);
+      return objection?.customResponses || [];
+    }
+  } catch (error) {
+    console.error('Error loading custom responses:', error);
+  }
+  return [];
+}
+
+export async function getObjections(): Promise<Objection[]> {
+  if (typeof window === 'undefined') {
+    return initialObjections;
+  }
+
+  try {
+    // Load custom responses and notes from API or localStorage in parallel
+    // This makes only 2 API calls total instead of N+1 calls
+    const [customResponsesData, notesData] = await Promise.all([
+      shouldUseAPI()
+        ? apiGet('/api/data/custom-responses').catch(() => ({ responses: [] }))
+        : Promise.resolve({ responses: [] }),
+      shouldUseAPI() 
+        ? apiGet('/api/data/notes').catch(() => ({ notes: [] }))
+        : Promise.resolve({ notes: getNotesSync() }),
+    ]);
+
+    // Group custom responses by objectionId
+    const responsesByObjection = new Map<string, Response[]>();
+    
+    if (shouldUseAPI()) {
+      // API now returns responses with objectionId included
+      if (customResponsesData?.responses && Array.isArray(customResponsesData.responses)) {
+        customResponsesData.responses.forEach((response: any) => {
+          if (response.objectionId) {
+            if (!responsesByObjection.has(response.objectionId)) {
+              responsesByObjection.set(response.objectionId, []);
+            }
+            responsesByObjection.get(response.objectionId)!.push({
+              id: response.id,
+              text: response.text,
+              isCustom: response.isCustom,
+              createdAt: response.createdAt,
+              createdBy: response.createdBy,
+              upvotes: response.upvotes || 0,
+              upvotedBy: response.upvotedBy || [],
+            });
+          }
+        });
+      }
+    } else {
+      // localStorage fallback
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.forEach((obj: Objection) => {
+          responsesByObjection.set(obj.id, obj.customResponses || []);
+        });
+      }
+    }
+
+    // Build notes map
+    const notesMap = new Map<string, string>();
+    (notesData.notes || []).forEach((note: ObjectionNote) => {
+      notesMap.set(note.objectionId, note.note);
+    });
+
+    return initialObjections.map(obj => ({
+      ...obj,
+      customResponses: responsesByObjection.get(obj.id) || [],
+      personalNote: notesMap.get(obj.id),
+    }));
+  } catch (error) {
+    console.error('Error loading objections:', error);
+    return initialObjections;
+  }
+}
+
+// Sync version for backward compatibility
+export function getObjectionsSync(): Objection[] {
   if (typeof window === 'undefined') {
     return initialObjections;
   }
@@ -20,17 +139,13 @@ export function getObjections(): Objection[] {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Merge custom responses with initial objections, preserving category and difficulty
-      // Load notes
-      const notes = getNotes();
+      const notes = getNotesSync();
       const notesMap = new Map(notes.map(n => [n.objectionId, n.note]));
       
       return initialObjections.map(obj => {
         const storedObj = parsed.find((o: Objection) => o.id === obj.id);
         return {
           ...obj,
-          category: obj.category, // Ensure category is preserved
-          difficulty: obj.difficulty, // Ensure difficulty is preserved
           customResponses: storedObj?.customResponses || [],
           personalNote: notesMap.get(obj.id) || undefined,
         };
@@ -43,27 +158,33 @@ export function getObjections(): Objection[] {
   return initialObjections;
 }
 
-export function saveCustomResponse(objectionId: string, response: Response): void {
+export async function saveCustomResponse(objectionId: string, response: Response): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  // Initialize upvotes if not present
+  if (!response.upvotes) response.upvotes = 0;
+  if (!response.upvotedBy) response.upvotedBy = [];
+
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/custom-responses', { objectionId, response });
+      return;
+    } catch (error) {
+      console.error('Error saving custom response to API:', error);
+      // Fall through to localStorage fallback
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     let objections: Objection[] = stored ? JSON.parse(stored) : [];
-
-    // Initialize upvotes if not present
-    if (!response.upvotes) {
-      response.upvotes = 0;
-    }
-    if (!response.upvotedBy) {
-      response.upvotedBy = [];
-    }
 
     const objectionIndex = objections.findIndex(o => o.id === objectionId);
     
     if (objectionIndex >= 0) {
       objections[objectionIndex].customResponses.push(response);
     } else {
-      // Find the objection in initial data and add custom response
       const initialObj = initialObjections.find(o => o.id === objectionId);
       if (initialObj) {
         objections.push({
@@ -76,16 +197,26 @@ export function saveCustomResponse(objectionId: string, response: Response): voi
     localStorage.setItem(STORAGE_KEY, JSON.stringify(objections));
   } catch (error) {
     console.error('Error saving custom response:', error);
-    // Re-throw to allow error recovery dialog to handle it
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       throw error;
     }
   }
 }
 
-export function upvoteResponse(objectionId: string, responseId: string): void {
+export async function upvoteResponse(objectionId: string, responseId: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPut('/api/data/custom-responses', { objectionId, responseId });
+      return;
+    } catch (error) {
+      console.error('Error upvoting response via API:', error);
+      // Fall through to localStorage
+    }
+  }
+
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return;
@@ -99,17 +230,12 @@ export function upvoteResponse(objectionId: string, responseId: string): void {
         if (!response.upvotes) response.upvotes = 0;
         if (!response.upvotedBy) response.upvotedBy = [];
         
-        // Simple user ID (in a real app, this would be from auth)
-        const userId = `user-${localStorage.getItem('user-id') || 'anonymous'}`;
-        
-        // Toggle upvote
+        const userId = getCurrentUserId() || 'anonymous';
         const index = response.upvotedBy.indexOf(userId);
         if (index > -1) {
-          // Remove upvote
           response.upvotedBy.splice(index, 1);
           response.upvotes = Math.max(0, response.upvotes - 1);
         } else {
-          // Add upvote
           response.upvotedBy.push(userId);
           response.upvotes = (response.upvotes || 0) + 1;
         }
@@ -123,6 +249,7 @@ export function upvoteResponse(objectionId: string, responseId: string): void {
 }
 
 export function isResponseUpvoted(objectionId: string, responseId: string): boolean {
+  // This would need to be async to check API, but keeping sync for compatibility
   if (typeof window === 'undefined') return false;
 
   try {
@@ -135,7 +262,7 @@ export function isResponseUpvoted(objectionId: string, responseId: string): bool
     if (objection) {
       const response = objection.customResponses.find(r => r.id === responseId);
       if (response && response.upvotedBy) {
-        const userId = `user-${localStorage.getItem('user-id') || 'anonymous'}`;
+        const userId = getCurrentUserId() || 'anonymous';
         return response.upvotedBy.includes(userId);
       }
     }
@@ -147,32 +274,57 @@ export function isResponseUpvoted(objectionId: string, responseId: string): bool
 }
 
 export function getAllObjections(): Objection[] {
-  return getObjections();
+  return getObjectionsSync();
 }
 
 // Confidence Rating Functions
-export function saveConfidenceRating(objectionId: string, rating: number): void {
+export async function saveConfidenceRating(objectionId: string, rating: number): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/confidence-ratings', { objectionId, rating });
+      return;
+    } catch (error) {
+      console.error('Error saving confidence rating to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const ratings = getConfidenceRatings();
+    const ratings = getConfidenceRatingsSync();
     const newRating: ConfidenceRating = {
       objectionId,
       rating,
       date: new Date().toISOString(),
     };
-    
-    // Add new rating (keep history)
     ratings.push(newRating);
     localStorage.setItem(CONFIDENCE_RATINGS_KEY, JSON.stringify(ratings));
+    invalidateStatsCache(); // Invalidate cache when rating is saved
   } catch (error) {
     console.error('Error saving confidence rating:', error);
   }
 }
 
-export function getConfidenceRatings(): ConfidenceRating[] {
+export async function getConfidenceRatings(): Promise<ConfidenceRating[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/confidence-ratings');
+      return data.ratings || [];
+    } catch (error) {
+      console.error('Error loading confidence ratings from API:', error);
+      // Fall through
+    }
+  }
+
+  return getConfidenceRatingsSync();
+}
+
+export function getConfidenceRatingsSync(): ConfidenceRating[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(CONFIDENCE_RATINGS_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -182,35 +334,38 @@ export function getConfidenceRatings(): ConfidenceRating[] {
   }
 }
 
-export function getAverageConfidenceRating(objectionId: string): number {
-  const ratings = getConfidenceRatings();
+export async function getAverageConfidenceRating(objectionId: string): Promise<number> {
+  const ratings = await getConfidenceRatings();
   const objectionRatings = ratings.filter(r => r.objectionId === objectionId);
-  
   if (objectionRatings.length === 0) return 0;
-  
   const sum = objectionRatings.reduce((acc, r) => acc + r.rating, 0);
   return sum / objectionRatings.length;
 }
 
-export function getLatestConfidenceRating(objectionId: string): number | null {
-  const ratings = getConfidenceRatings();
+export async function getLatestConfidenceRating(objectionId: string): Promise<number | null> {
+  const ratings = await getConfidenceRatings();
   const objectionRatings = ratings.filter(r => r.objectionId === objectionId);
-  
   if (objectionRatings.length === 0) return null;
-  
-  // Sort by date descending and get most recent
   const sorted = objectionRatings.sort((a, b) => 
     new Date(b.date).getTime() - new Date(a.date).getTime()
   );
-  
   return sorted[0].rating;
 }
 
-export function getObjectionsNeedingPractice(threshold: number = 3): string[] {
-  const ratings = getConfidenceRatings();
+export function getLatestConfidenceRatingSync(objectionId: string): number | null {
+  const ratings = getConfidenceRatingsSync();
+  const objectionRatings = ratings.filter(r => r.objectionId === objectionId);
+  if (objectionRatings.length === 0) return null;
+  const sorted = objectionRatings.sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  return sorted[0].rating;
+}
+
+export async function getObjectionsNeedingPractice(threshold: number = 3): Promise<string[]> {
+  const ratings = await getConfidenceRatings();
   const objectionRatings = new Map<string, number[]>();
   
-  // Group ratings by objection
   ratings.forEach(rating => {
     if (!objectionRatings.has(rating.objectionId)) {
       objectionRatings.set(rating.objectionId, []);
@@ -230,21 +385,49 @@ export function getObjectionsNeedingPractice(threshold: number = 3): string[] {
 }
 
 // Practice Session Functions
-export function savePracticeSession(session: PracticeSession): void {
+export async function savePracticeSession(session: PracticeSession): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/practice-sessions', { session });
+      invalidateStatsCache(); // Invalidate cache when new session is saved
+      return;
+    } catch (error) {
+      console.error('Error saving practice session to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const sessions = getPracticeSessions();
+    const sessions = getPracticeSessionsSync();
     sessions.push(session);
     localStorage.setItem(PRACTICE_SESSIONS_KEY, JSON.stringify(sessions));
+    invalidateStatsCache(); // Invalidate cache when new session is saved
   } catch (error) {
     console.error('Error saving practice session:', error);
   }
 }
 
-export function getPracticeSessions(): PracticeSession[] {
+export async function getPracticeSessions(): Promise<PracticeSession[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/practice-sessions');
+      return data.sessions || [];
+    } catch (error) {
+      console.error('Error loading practice sessions from API:', error);
+      // Fall through
+    }
+  }
+
+  return getPracticeSessionsSync();
+}
+
+export function getPracticeSessionsSync(): PracticeSession[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(PRACTICE_SESSIONS_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -254,26 +437,160 @@ export function getPracticeSessions(): PracticeSession[] {
   }
 }
 
-export function getTotalSessions(): number {
-  return getPracticeSessions().length;
+// Combined stats endpoint - fetches all stats in one API call
+let cachedStats: any = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5000; // 5 seconds
+
+export async function getAllStats(): Promise<{
+  totalSessions: number;
+  totalObjectionsPracticed: number;
+  streak: number;
+  categoryStats: Record<string, { practiced: number; total: number }>;
+  totalObjections: number;
+  totalPoints: number;
+  userLevel: {
+    level: number;
+    levelName: string;
+    totalPoints: number;
+    pointsToNextLevel: number;
+    currentLevelPoints: number;
+  };
+  spacedRepetition: {
+    totalScheduled: number;
+    dueForReview: number;
+    upcomingThisWeek: number;
+    averageInterval: number;
+    averageEaseFactor: number;
+  };
+  categoryMastery: Array<{
+    category: string;
+    masteryLevel: number;
+    objectionsPracticed: number;
+    totalObjections: number;
+    averageConfidence: number;
+    badgeEarned: string | null;
+  }>;
+  recentPoints: number;
+}> {
+  // Return cached stats if available and fresh
+  if (cachedStats && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedStats;
+  }
+
+  if (typeof window === 'undefined') {
+    return {
+      totalSessions: 0,
+      totalObjectionsPracticed: 0,
+      streak: 0,
+      categoryStats: {},
+      totalObjections: 0,
+      totalPoints: 0,
+      userLevel: {
+        level: 1,
+        levelName: 'Beginner',
+        totalPoints: 0,
+        pointsToNextLevel: 100,
+        currentLevelPoints: 0,
+      },
+      spacedRepetition: {
+        totalScheduled: 0,
+        dueForReview: 0,
+        upcomingThisWeek: 0,
+        averageInterval: 0,
+        averageEaseFactor: 0,
+      },
+      categoryMastery: [],
+      recentPoints: 0,
+    };
+  }
+
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/stats');
+      // Cache the result
+      cachedStats = data;
+      cacheTimestamp = Date.now();
+      return data;
+    } catch (error) {
+      console.error('Error loading stats from API:', error);
+      // Fall through to individual calls
+    }
+  }
+
+  // Fallback to individual calls (for localStorage or error cases)
+  const [totalSessions, totalObjectionsPracticed, streak, categoryStats] = await Promise.all([
+    getTotalSessions(),
+    getTotalObjectionsPracticed(),
+    getPracticeStreak(),
+    getCategoryStats(),
+  ]);
+
+  const fallbackStats = {
+    totalSessions,
+    totalObjectionsPracticed,
+    streak,
+    categoryStats,
+    totalObjections: initialObjections.length,
+    totalPoints: 0,
+    userLevel: {
+      level: 1,
+      levelName: 'Beginner',
+      totalPoints: 0,
+      pointsToNextLevel: 100,
+      currentLevelPoints: 0,
+    },
+    spacedRepetition: {
+      totalScheduled: 0,
+      dueForReview: 0,
+      upcomingThisWeek: 0,
+      averageInterval: 0,
+      averageEaseFactor: 0,
+    },
+    categoryMastery: [],
+    recentPoints: 0,
+  };
+
+  // Cache fallback result too
+  cachedStats = fallbackStats;
+  cacheTimestamp = Date.now();
+  return fallbackStats;
 }
 
-export function getTotalObjectionsPracticed(): number {
-  const sessions = getPracticeSessions();
+// Function to invalidate cache (call after data changes)
+export function invalidateStatsCache(): void {
+  cachedStats = null;
+  cacheTimestamp = 0;
+}
+
+// Keep individual functions for backward compatibility, but they use cached data when possible
+export async function getTotalSessions(): Promise<number> {
+  if (cachedStats && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedStats.totalSessions;
+  }
+  const sessions = await getPracticeSessions();
+  return sessions.length;
+}
+
+export async function getTotalObjectionsPracticed(): Promise<number> {
+  if (cachedStats && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedStats.totalObjectionsPracticed;
+  }
+  const sessions = await getPracticeSessions();
   const allObjections = new Set<string>();
-  
   sessions.forEach(session => {
     session.objectionsPracticed.forEach(id => allObjections.add(id));
   });
-  
   return allObjections.size;
 }
 
-export function getPracticeStreak(): number {
-  const sessions = getPracticeSessions();
+export async function getPracticeStreak(): Promise<number> {
+  if (cachedStats && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedStats.streak;
+  }
+  const sessions = await getPracticeSessions();
   if (sessions.length === 0) return 0;
   
-  // Sort sessions by date descending
   const sorted = sessions.sort((a, b) => 
     new Date(b.date).getTime() - new Date(a.date).getTime()
   );
@@ -282,7 +599,6 @@ export function getPracticeStreak(): number {
   let currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);
   
-  // Group sessions by date
   const sessionsByDate = new Map<string, PracticeSession[]>();
   sorted.forEach(session => {
     const sessionDate = new Date(session.date);
@@ -295,7 +611,6 @@ export function getPracticeStreak(): number {
     sessionsByDate.get(dateKey)!.push(session);
   });
   
-  // Check consecutive days
   const dateKeys = Array.from(sessionsByDate.keys()).sort().reverse();
   
   for (let i = 0; i < dateKeys.length; i++) {
@@ -314,12 +629,17 @@ export function getPracticeStreak(): number {
   return streak;
 }
 
-export function getCategoryStats(): Record<string, { practiced: number; total: number }> {
-  const sessions = getPracticeSessions();
-  const objections = getObjections();
+export async function getCategoryStats(): Promise<Record<string, { practiced: number; total: number }>> {
+  if (cachedStats && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    return cachedStats.categoryStats;
+  }
+  const [sessions, objections] = await Promise.all([
+    getPracticeSessions(),
+    getObjections(),
+  ]);
+  
   const categoryStats: Record<string, { practiced: Set<string>; total: number }> = {};
   
-  // Initialize categories
   objections.forEach(obj => {
     if (!categoryStats[obj.category]) {
       categoryStats[obj.category] = { practiced: new Set(), total: 0 };
@@ -327,7 +647,6 @@ export function getCategoryStats(): Record<string, { practiced: number; total: n
     categoryStats[obj.category].total++;
   });
   
-  // Count practiced objections by category
   const allPracticed = new Set<string>();
   sessions.forEach(session => {
     session.objectionsPracticed.forEach(id => allPracticed.add(id));
@@ -340,7 +659,6 @@ export function getCategoryStats(): Record<string, { practiced: number; total: n
     }
   });
   
-  // Convert Set to number
   const result: Record<string, { practiced: number; total: number }> = {};
   Object.keys(categoryStats).forEach(category => {
     result[category] = {
@@ -353,11 +671,22 @@ export function getCategoryStats(): Record<string, { practiced: number; total: n
 }
 
 // Notes Functions
-export function saveNote(objectionId: string, note: string): void {
+export async function saveNote(objectionId: string, note: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/notes', { objectionId, note });
+      return;
+    } catch (error) {
+      console.error('Error saving note to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const notes = getNotes();
+    const notes = getNotesSync();
     const existingIndex = notes.findIndex(n => n.objectionId === objectionId);
     
     const noteData: ObjectionNote = {
@@ -379,9 +708,24 @@ export function saveNote(objectionId: string, note: string): void {
   }
 }
 
-export function getNotes(): ObjectionNote[] {
+export async function getNotes(): Promise<ObjectionNote[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/notes');
+      return data.notes || [];
+    } catch (error) {
+      console.error('Error loading notes from API:', error);
+      // Fall through
+    }
+  }
+
+  return getNotesSync();
+}
+
+export function getNotesSync(): ObjectionNote[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(NOTES_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -391,17 +735,28 @@ export function getNotes(): ObjectionNote[] {
   }
 }
 
-export function getNote(objectionId: string): string | null {
-  const notes = getNotes();
+export async function getNote(objectionId: string): Promise<string | null> {
+  const notes = await getNotes();
   const note = notes.find(n => n.objectionId === objectionId);
   return note ? note.note : null;
 }
 
-export function deleteNote(objectionId: string): void {
+export async function deleteNote(objectionId: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiDelete('/api/data/notes', { objectionId });
+      return;
+    } catch (error) {
+      console.error('Error deleting note via API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const notes = getNotes();
+    const notes = getNotesSync();
     const filtered = notes.filter(n => n.objectionId !== objectionId);
     localStorage.setItem(NOTES_KEY, JSON.stringify(filtered));
   } catch (error) {
@@ -410,11 +765,22 @@ export function deleteNote(objectionId: string): void {
 }
 
 // Response Template Functions
-export function saveTemplate(template: ResponseTemplate): void {
+export async function saveTemplate(template: ResponseTemplate): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/templates', { template });
+      return;
+    } catch (error) {
+      console.error('Error saving template to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const templates = getTemplates();
+    const templates = getTemplatesSync();
     const existingIndex = templates.findIndex(t => t.id === template.id);
     
     if (existingIndex >= 0) {
@@ -429,9 +795,24 @@ export function saveTemplate(template: ResponseTemplate): void {
   }
 }
 
-export function getTemplates(): ResponseTemplate[] {
+export async function getTemplates(): Promise<ResponseTemplate[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/templates');
+      return data.templates || [];
+    } catch (error) {
+      console.error('Error loading templates from API:', error);
+      // Fall through
+    }
+  }
+
+  return getTemplatesSync();
+}
+
+export function getTemplatesSync(): ResponseTemplate[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(TEMPLATES_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -441,11 +822,22 @@ export function getTemplates(): ResponseTemplate[] {
   }
 }
 
-export function deleteTemplate(templateId: string): void {
+export async function deleteTemplate(templateId: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiDelete('/api/data/templates', { templateId });
+      return;
+    } catch (error) {
+      console.error('Error deleting template via API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const templates = getTemplates();
+    const templates = getTemplatesSync();
     const filtered = templates.filter(t => t.id !== templateId);
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered));
   } catch (error) {
@@ -466,26 +858,34 @@ export function getDefaultTemplate(): ResponseTemplate {
 }
 
 // Practice History Functions
-export function recordPracticeHistory(objectionId: string, sessionId: string, confidenceRating?: number): void {
+export async function recordPracticeHistory(objectionId: string, sessionId: string, confidenceRating?: number): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  if (shouldUseAPI()) {
+    try {
+      await apiPost('/api/data/practice-history', { objectionId, sessionId, confidenceRating });
+      return;
+    } catch (error) {
+      console.error('Error recording practice history to API:', error);
+      // Fall through
+    }
+  }
+
+  // Fallback to localStorage
   try {
-    const history = getPracticeHistory();
+    const history = getPracticeHistorySync();
     const today = new Date().toISOString().split('T')[0];
     
-    // Find existing entry for today
     const existingIndex = history.findIndex(
       entry => entry.objectionId === objectionId && entry.date === today
     );
 
     if (existingIndex >= 0) {
-      // Update existing entry
       history[existingIndex].timesPracticed += 1;
       if (confidenceRating) {
         history[existingIndex].confidenceRating = confidenceRating;
       }
     } else {
-      // Create new entry
       const allHistoryForObjection = history.filter(e => e.objectionId === objectionId);
       const newEntry: PracticeHistoryEntry = {
         objectionId,
@@ -503,9 +903,24 @@ export function recordPracticeHistory(objectionId: string, sessionId: string, co
   }
 }
 
-export function getPracticeHistory(): PracticeHistoryEntry[] {
+export async function getPracticeHistory(): Promise<PracticeHistoryEntry[]> {
   if (typeof window === 'undefined') return [];
 
+  if (shouldUseAPI()) {
+    try {
+      const data = await apiGet('/api/data/practice-history');
+      return data.history || [];
+    } catch (error) {
+      console.error('Error loading practice history from API:', error);
+      // Fall through
+    }
+  }
+
+  return getPracticeHistorySync();
+}
+
+export function getPracticeHistorySync(): PracticeHistoryEntry[] {
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(PRACTICE_HISTORY_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -515,36 +930,36 @@ export function getPracticeHistory(): PracticeHistoryEntry[] {
   }
 }
 
-export function getObjectionPracticeHistory(objectionId: string): PracticeHistoryEntry[] {
-  const history = getPracticeHistory();
+export async function getObjectionPracticeHistory(objectionId: string): Promise<PracticeHistoryEntry[]> {
+  const history = await getPracticeHistory();
   return history
     .filter(entry => entry.objectionId === objectionId)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-export function getAllPracticedObjections(): string[] {
-  const history = getPracticeHistory();
+export async function getAllPracticedObjections(): Promise<string[]> {
+  const history = await getPracticeHistory();
   const uniqueIds = new Set(history.map(entry => entry.objectionId));
   return Array.from(uniqueIds);
 }
 
-export function getObjectionPracticeCount(objectionId: string): number {
-  const history = getPracticeHistory();
+export async function getObjectionPracticeCount(objectionId: string): Promise<number> {
+  const history = await getPracticeHistory();
   return history.filter(entry => entry.objectionId === objectionId).length;
 }
 
-export function getObjectionFirstPracticedDate(objectionId: string): string | null {
-  const history = getObjectionPracticeHistory(objectionId);
+export async function getObjectionFirstPracticedDate(objectionId: string): Promise<string | null> {
+  const history = await getObjectionPracticeHistory(objectionId);
   return history.length > 0 ? history[0].date : null;
 }
 
-export function getObjectionLastPracticedDate(objectionId: string): string | null {
-  const history = getObjectionPracticeHistory(objectionId);
+export async function getObjectionLastPracticedDate(objectionId: string): Promise<string | null> {
+  const history = await getObjectionPracticeHistory(objectionId);
   return history.length > 0 ? history[history.length - 1].date : null;
 }
 
-export function getConfidenceImprovement(objectionId: string): { trend: 'improving' | 'declining' | 'stable'; average: number } | null {
-  const history = getObjectionPracticeHistory(objectionId);
+export async function getConfidenceImprovement(objectionId: string): Promise<{ trend: 'improving' | 'declining' | 'stable'; average: number } | null> {
+  const history = await getObjectionPracticeHistory(objectionId);
   const withRatings = history.filter(entry => entry.confidenceRating !== undefined);
   
   if (withRatings.length < 2) return null;
@@ -552,7 +967,6 @@ export function getConfidenceImprovement(objectionId: string): { trend: 'improvi
   const ratings = withRatings.map(entry => entry.confidenceRating!);
   const average = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
   
-  // Compare first half vs second half
   const midpoint = Math.floor(ratings.length / 2);
   const firstHalf = ratings.slice(0, midpoint);
   const secondHalf = ratings.slice(midpoint);
@@ -567,8 +981,8 @@ export function getConfidenceImprovement(objectionId: string): { trend: 'improvi
   return { trend, average };
 }
 
-export function getPracticeHistoryByDateRange(startDate: string, endDate: string): PracticeHistoryEntry[] {
-  const history = getPracticeHistory();
+export async function getPracticeHistoryByDateRange(startDate: string, endDate: string): Promise<PracticeHistoryEntry[]> {
+  const history = await getPracticeHistory();
   const start = new Date(startDate).getTime();
   const end = new Date(endDate).getTime();
   
@@ -577,4 +991,3 @@ export function getPracticeHistoryByDateRange(startDate: string, endDate: string
     return entryDate >= start && entryDate <= end;
   });
 }
-

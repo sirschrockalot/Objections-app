@@ -102,13 +102,21 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
     .concat(objection.defaultResponses);
 
   useEffect(() => {
-    setConfidenceRating(getLatestConfidenceRating(objection.id));
-    const savedNote = getNote(objection.id);
-    setNote(savedNote || '');
+    const loadData = async () => {
+      const [latestRating, savedNote] = await Promise.all([
+        getLatestConfidenceRating(objection.id),
+        getNote(objection.id),
+      ]);
+      if (latestRating !== null) {
+        setConfidenceRating(latestRating);
+      }
+      setNote(savedNote || '');
+    };
+    loadData();
   }, [objection.id]);
 
-  const handleSaveNote = () => {
-    saveNote(objection.id, note);
+  const handleSaveNote = async () => {
+    await saveNote(objection.id, note);
     if (onRatingChange) {
       onRatingChange();
     }
@@ -120,15 +128,15 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
     setShowTemplateBuilder(false);
   };
 
-  const handleUpvote = (responseId: string) => {
-    upvoteResponse(objection.id, responseId);
+  const handleUpvote = async (responseId: string) => {
+    await upvoteResponse(objection.id, responseId);
     if (onUpvote) {
       onUpvote();
     }
   };
 
-  const handleRatingClick = (rating: number) => {
-    saveConfidenceRating(objection.id, rating);
+  const handleRatingClick = async (rating: number) => {
+    await saveConfidenceRating(objection.id, rating);
     setConfidenceRating(rating);
     
     // Award points based on confidence rating
@@ -142,7 +150,7 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
         points = POINTS_VALUES.CONFIDENCE_RATING_3;
       }
       if (points > 0) {
-        addPoints(points, `Confidence rating: ${rating}/5`, {
+        await addPoints(points, `Confidence rating: ${rating}/5`, {
           objectionId: objection.id,
           rating,
         });
