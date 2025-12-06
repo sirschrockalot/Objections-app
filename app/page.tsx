@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import ObjectionCard from '@/components/ObjectionCard';
 import LoadingAnimation from '@/components/LoadingAnimation';
 import StatsDashboard from '@/components/StatsDashboard';
+import MarketIntelligence from '@/components/MarketIntelligence';
 import Celebration from '@/components/Celebration';
 import ChallengeMode from '@/components/ChallengeMode';
 import ReviewMode from '@/components/ReviewMode';
@@ -55,6 +56,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showMarketIntelligence, setShowMarketIntelligence] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [practiceMode, setPracticeMode] = useState<PracticeMode>('random');
@@ -459,7 +461,7 @@ export default function Home() {
             </div>
 
             {/* Stats Dashboard Toggle */}
-            <div className="max-w-5xl mx-auto mb-6">
+            <div className="max-w-5xl mx-auto mb-6 flex gap-2">
               <Button
                 onClick={() => setShowStats(!showStats)}
                 variant="outline"
@@ -470,6 +472,16 @@ export default function Home() {
               >
                 {showStats ? 'Hide' : 'Show'} Stats Dashboard
               </Button>
+              <Button
+                onClick={() => setShowMarketIntelligence(!showMarketIntelligence)}
+                variant="outline"
+                className="mb-4"
+                aria-label={showMarketIntelligence ? 'Hide market intelligence' : 'Show market intelligence'}
+                aria-expanded={showMarketIntelligence}
+              >
+                {showMarketIntelligence ? 'Hide' : 'Show'} Market Intelligence
+              </Button>
+            </div>
           
           {showStats && (
             <motion.div
