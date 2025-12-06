@@ -19,7 +19,6 @@ const PracticeSessionSchema = new Schema<IPracticeSession>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     sessionId: {
       type: String,
@@ -29,7 +28,6 @@ const PracticeSessionSchema = new Schema<IPracticeSession>(
     date: {
       type: Date,
       default: Date.now,
-      index: true,
     },
     objectionsPracticed: {
       type: [String],

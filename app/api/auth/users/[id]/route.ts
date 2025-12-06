@@ -2,22 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import bcrypt from 'bcryptjs';
+import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { validatePassword } from '@/lib/passwordValidation';
 
-// Helper to check if user is admin
-async function checkAdmin(request: NextRequest): Promise<{ isAdmin: boolean; userId: string | null }> {
-  const userId = request.headers.get('x-user-id');
-  if (!userId) {
-    return { isAdmin: false, userId: null };
-  }
-
-  try {
-    await connectDB();
-    const user = await User.findById(userId).lean();
-    return { isAdmin: user?.isAdmin === true, userId };
-  } catch (error) {
-    return { isAdmin: false, userId };
-  }
-}
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
 
 // Update user
 export async function PUT(
@@ -26,10 +15,19 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const { isAdmin, userId: currentUserId } = await checkAdmin(request);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require admin authentication
+    const auth = await requireAdmin(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    const currentUserId = auth.userId!;
 
     await connectDB();
 
@@ -75,13 +73,14 @@ export async function PUT(
     }
 
     if (password !== undefined && password.trim() !== '') {
-      if (password.length < 6) {
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.valid) {
         return NextResponse.json(
-          { error: 'Password must be at least 6 characters' },
+          { error: passwordValidation.error },
           { status: 400 }
         );
       }
-      user.passwordHash = await bcrypt.hash(password, 10);
+      user.passwordHash = await bcrypt.hash(password, 12);
     }
 
     if (isActive !== undefined) {
@@ -97,7 +96,7 @@ export async function PUT(
     const userObj = user.toObject();
     const { passwordHash: _, ...userWithoutPassword } = userObj;
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: user._id.toString(),
         username: user.username,
@@ -109,10 +108,13 @@ export async function PUT(
         mustChangePassword: user.mustChangePassword || false,
       },
     });
+    
+    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
+    return response;
   } catch (error: any) {
     console.error('Update user error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update user' },
+      { error: 'Failed to update user' },
       { status: 500 }
     );
   }
@@ -125,10 +127,19 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const { isAdmin, userId: currentUserId } = await checkAdmin(request);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require admin authentication
+    const auth = await requireAdmin(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    const currentUserId = auth.userId!;
 
     await connectDB();
 
@@ -152,11 +163,13 @@ export async function DELETE(
     user.isActive = false;
     await user.save();
 
-    return NextResponse.json({ success: true, message: 'User deactivated' });
+    const response = NextResponse.json({ success: true, message: 'User deactivated' });
+    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
+    return response;
   } catch (error: any) {
     console.error('Delete user error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to delete user' },
+      { error: 'Failed to delete user' },
       { status: 500 }
     );
   }

@@ -15,12 +15,10 @@ const ConfidenceRatingSchema = new Schema<IConfidenceRating>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     rating: {
       type: Number,
@@ -31,7 +29,6 @@ const ConfidenceRatingSchema = new Schema<IConfidenceRating>(
     date: {
       type: Date,
       default: Date.now,
-      index: true,
     },
   },
   {

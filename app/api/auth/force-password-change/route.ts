@@ -3,18 +3,28 @@ import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import UserActivity from '@/lib/models/UserActivity';
 import bcrypt from 'bcryptjs';
+import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { validatePassword } from '@/lib/passwordValidation';
+
+const authRateLimit = createRateLimitMiddleware(RATE_LIMITS.auth);
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
+    // Apply rate limiting
+    const rateLimitResult = await authRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     const body = await request.json();
     const { newPassword } = body;
@@ -26,9 +36,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (newPassword.length < 6) {
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.valid) {
       return NextResponse.json(
-        { error: 'New password must be at least 6 characters' },
+        { error: passwordValidation.error },
         { status: 400 }
       );
     }
@@ -50,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update password and clear mustChangePassword flag
-    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
     user.mustChangePassword = false;
     await user.save();
 
@@ -64,7 +75,7 @@ export async function POST(request: NextRequest) {
       url: request.headers.get('referer') || undefined,
     });
 
-    return NextResponse.json({ 
+    const response = NextResponse.json({ 
       success: true,
       user: {
         id: user._id.toString(),
@@ -77,10 +88,13 @@ export async function POST(request: NextRequest) {
         mustChangePassword: false,
       },
     });
+    
+    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
+    return response;
   } catch (error: any) {
     console.error('Force password change error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to change password' },
+      { error: 'Failed to change password' },
       { status: 500 }
     );
   }

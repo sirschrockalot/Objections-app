@@ -3,28 +3,23 @@ import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import UserActivity from '@/lib/models/UserActivity';
 import PracticeSession from '@/lib/models/PracticeSession';
+import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
 
-// Helper to check if user is admin
-async function checkAdmin(request: NextRequest): Promise<boolean> {
-  const userId = request.headers.get('x-user-id');
-  if (!userId) {
-    return false;
-  }
-
-  try {
-    await connectDB();
-    const user = await User.findById(userId).lean();
-    return user?.isAdmin === true;
-  } catch (error) {
-    return false;
-  }
-}
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
 
 export async function GET(request: NextRequest) {
   try {
-    const isAdmin = await checkAdmin(request);
-    if (!isAdmin) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
+    }
+
+    // Require admin authentication
+    const auth = await requireAdmin(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
     }
 
     await connectDB();

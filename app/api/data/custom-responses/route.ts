@@ -1,22 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import CustomResponse from '@/lib/models/CustomResponse';
+import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { getSafeErrorMessage, logError } from '@/lib/errorHandler';
+import { sanitizeString, sanitizeObjectId } from '@/lib/inputValidation';
+
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
 
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
+
     const { searchParams } = new URL(request.url);
-    const objectionId = searchParams.get('objectionId');
+    const objectionIdParam = searchParams.get('objectionId');
 
     const query: any = { userId };
-    if (objectionId) {
-      query.objectionId = objectionId;
+    if (objectionIdParam) {
+      const sanitizedObjectionId = sanitizeObjectId(objectionIdParam);
+      if (sanitizedObjectionId) {
+        query.objectionId = sanitizedObjectionId;
+      }
     }
 
     const responses = await CustomResponse.find(query).sort({ createdAt: -1 }).lean();
@@ -34,35 +51,51 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error: any) {
-    console.error('Get custom responses error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get responses' }, { status: 500 });
+    logError('Get custom responses', error);
+    return NextResponse.json(
+      { error: getSafeErrorMessage(error, 'Failed to get responses') },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     const body = await request.json();
     const { objectionId, response } = body;
 
-    if (!objectionId || !response || !response.id || !response.text) {
+    // Sanitize inputs
+    const sanitizedObjectionId = sanitizeObjectId(objectionId);
+    const sanitizedResponseId = sanitizeObjectId(response?.id);
+    const sanitizedText = sanitizeString(response?.text, 5000);
+
+    if (!sanitizedObjectionId || !response || !sanitizedResponseId || !sanitizedText) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
     const customResponse = await CustomResponse.create({
       userId,
-      objectionId,
-      responseId: response.id,
-      text: response.text,
+      objectionId: sanitizedObjectionId,
+      responseId: sanitizedResponseId,
+      text: sanitizedText,
       isCustom: response.isCustom ?? true,
       createdAt: new Date(response.createdAt || Date.now()),
-      createdBy: response.createdBy,
+      createdBy: sanitizeString(response.createdBy, 255),
       upvotes: response.upvotes || 0,
       upvotedBy: response.upvotedBy || [],
     });
@@ -79,19 +112,30 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('Save custom response error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to save response' }, { status: 500 });
+    logError('Save custom response', error);
+    return NextResponse.json(
+      { error: getSafeErrorMessage(error, 'Failed to save response') },
+      { status: 500 }
+    );
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     const body = await request.json();
     const { objectionId, responseId } = body;

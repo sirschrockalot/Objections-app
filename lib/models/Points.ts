@@ -17,7 +17,6 @@ const PointsSchema = new Schema<IPoints>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     pointsId: {
       type: String,
@@ -35,7 +34,6 @@ const PointsSchema = new Schema<IPoints>(
     date: {
       type: Date,
       default: Date.now,
-      index: true,
     },
     metadata: {
       type: Schema.Types.Mixed,

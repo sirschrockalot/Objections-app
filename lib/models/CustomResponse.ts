@@ -20,12 +20,10 @@ const CustomResponseSchema = new Schema<ICustomResponse>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     responseId: {
       type: String,
@@ -62,7 +60,7 @@ const CustomResponseSchema = new Schema<ICustomResponse>(
 );
 
 CustomResponseSchema.index({ userId: 1, objectionId: 1 });
-CustomResponseSchema.index({ responseId: 1 });
+// Note: responseId already has an index from unique: true
 
 const CustomResponse: CustomResponseModel =
   mongoose.models.CustomResponse ||

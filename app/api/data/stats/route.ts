@@ -5,15 +5,27 @@ import ConfidenceRating from '@/lib/models/ConfidenceRating';
 import ReviewSchedule from '@/lib/models/ReviewSchedule';
 import Points from '@/lib/models/Points';
 import { initialObjections } from '@/data/objections';
+import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     // Fetch all data in parallel
     const [sessions, ratings, reviewSchedules, pointsEntries] = await Promise.all([

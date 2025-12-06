@@ -39,7 +39,6 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>(
       type: String,
       trim: true,
       lowercase: true,
-      sparse: true, // Allows multiple null values but enforces uniqueness for non-null
     },
     passwordHash: {
       type: String,
@@ -71,8 +70,8 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>(
 );
 
 // Index for faster lookups
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
+// Note: username already has an index from unique: true
+UserSchema.index({ email: 1 }, { sparse: true });
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ isAdmin: 1 });
 

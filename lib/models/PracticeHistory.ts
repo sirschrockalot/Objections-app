@@ -17,17 +17,14 @@ const PracticeHistorySchema = new Schema<IPracticeHistory>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     date: {
       type: String,
       required: true,
-      index: true,
     },
     sessionId: {
       type: String,

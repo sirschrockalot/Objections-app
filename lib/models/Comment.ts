@@ -20,17 +20,14 @@ const CommentSchema = new Schema<IComment>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     responseId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     text: {
       type: String,

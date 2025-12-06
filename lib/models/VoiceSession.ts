@@ -39,7 +39,6 @@ const VoiceSessionSchema = new Schema<IVoiceSession>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     sessionId: {
       type: String,
@@ -73,7 +72,6 @@ const VoiceSessionSchema = new Schema<IVoiceSession>(
       type: String,
       enum: ['active', 'paused', 'completed', 'error', 'recovered'],
       required: true,
-      index: true,
     },
     lastSavedAt: {
       type: String,

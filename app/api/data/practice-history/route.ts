@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import PracticeHistory from '@/lib/models/PracticeHistory';
+import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     const { searchParams } = new URL(request.url);
     const objectionId = searchParams.get('objectionId');
@@ -38,12 +50,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
-    const userId = request.headers.get('x-user-id');
-    if (!userId) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
     }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
+    await connectDB();
+    const userId = auth.userId!;
 
     const body = await request.json();
     const { objectionId, sessionId, confidenceRating } = body;

@@ -19,17 +19,14 @@ const ReviewScheduleSchema = new Schema<IReviewSchedule>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     nextReviewDate: {
       type: String,
       required: true,
-      index: true,
     },
     interval: {
       type: Number,
@@ -53,7 +50,6 @@ const ReviewScheduleSchema = new Schema<IReviewSchedule>(
     isDue: {
       type: Boolean,
       default: false,
-      index: true,
     },
   },
   {

@@ -19,7 +19,6 @@ const ResponseTemplateSchema = new Schema<IResponseTemplate>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     templateId: {
       type: String,

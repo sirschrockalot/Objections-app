@@ -18,12 +18,10 @@ const LearningPathProgressSchema = new Schema<ILearningPathProgress>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     pathId: {
       type: String,
       required: true,
-      index: true,
     },
     currentStep: {
       type: Number,

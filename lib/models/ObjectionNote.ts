@@ -16,12 +16,10 @@ const ObjectionNoteSchema = new Schema<IObjectionNote>(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
     objectionId: {
       type: String,
       required: true,
-      index: true,
     },
     note: {
       type: String,

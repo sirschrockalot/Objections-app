@@ -1,13 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import UserActivity from '@/lib/models/UserActivity';
+import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+
+const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
 
 export async function GET(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await apiRateLimit(request);
+    if (!rateLimitResult.allowed) {
+      return rateLimitResult.response!;
+    }
+
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (!auth.authenticated) {
+      return createAuthErrorResponse(auth);
+    }
+
     await connectDB();
 
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const userId = searchParams.get('userId') || auth.userId;
 
     let query: any = {};
     if (userId) {

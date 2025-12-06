@@ -1,4 +1,16 @@
 import mongoose from 'mongoose';
+import { validateEnvVars } from './envValidation';
+
+// Validate environment variables on first import
+try {
+  validateEnvVars();
+} catch (error) {
+  console.error('Environment variable validation failed:', error);
+  // In production, we might want to exit, but in development we'll just warn
+  if (process.env.NODE_ENV === 'production') {
+    throw error;
+  }
+}
 
 function getMongoDBUri(): string {
   const uri = process.env.MONGODB_URI;

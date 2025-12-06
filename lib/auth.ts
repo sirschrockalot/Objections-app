@@ -31,19 +31,32 @@ function getApiUrl(): string {
 }
 
 /**
- * Helper function to get auth headers
+ * Helper function to get auth token from storage
+ */
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('auth-token');
+}
+
+/**
+ * Helper function to get refresh token from storage
+ */
+function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('refresh-token');
+}
+
+/**
+ * Helper function to get auth headers with JWT token
  */
 function getAuthHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
   
-  const userId = typeof window !== 'undefined' 
-    ? localStorage.getItem(USER_ID_STORAGE_KEY)
-    : null;
-  
-  if (userId) {
-    headers['x-user-id'] = userId;
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
   
   return headers;
@@ -76,6 +89,16 @@ export async function registerUser(
       throw new Error(data.error || 'Registration failed');
     }
 
+    // Store tokens if provided
+    if (typeof window !== 'undefined') {
+      if (data.token) {
+        localStorage.setItem('auth-token', data.token);
+      }
+      if (data.refreshToken) {
+        localStorage.setItem('refresh-token', data.refreshToken);
+      }
+    }
+
     return data.user;
   } catch (error: any) {
     throw new Error(error.message || 'Registration failed');
@@ -106,6 +129,16 @@ export async function authenticateUser(
 
     if (!response.ok) {
       return null;
+    }
+
+    // Store tokens if provided
+    if (typeof window !== 'undefined') {
+      if (data.token) {
+        localStorage.setItem('auth-token', data.token);
+      }
+      if (data.refreshToken) {
+        localStorage.setItem('refresh-token', data.refreshToken);
+      }
     }
 
     return data.user;
@@ -142,13 +175,13 @@ export function getCurrentUser(): User | null {
 }
 
 /**
- * Fetch current user from API
+ * Fetch current user from API using JWT token
  */
 export async function fetchCurrentUser(): Promise<User | null> {
   if (typeof window === 'undefined') return null;
 
-  const userId = localStorage.getItem(USER_ID_STORAGE_KEY);
-  if (!userId) return null;
+  const token = getAuthToken();
+  if (!token) return null;
 
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/me`, {
@@ -157,6 +190,10 @@ export async function fetchCurrentUser(): Promise<User | null> {
     });
 
     if (!response.ok) {
+      // If token is invalid, clear it
+      if (response.status === 401) {
+        clearCurrentUser();
+      }
       return null;
     }
 
@@ -200,6 +237,8 @@ export async function clearCurrentUser(): Promise<void> {
 
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(USER_ID_STORAGE_KEY);
+  localStorage.removeItem('auth-token');
+  localStorage.removeItem('refresh-token');
 }
 
 /**
