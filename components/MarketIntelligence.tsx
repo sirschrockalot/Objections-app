@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Search, Home, TrendingUp, DollarSign, Calculator } from 'lucide-react';
+import { Loader2, Search, Home, TrendingUp, DollarSign, Calculator, Brain, AlertTriangle, CheckCircle, XCircle, TrendingDown, Minus } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/apiClient';
 
 interface PropertyAnalysis {
