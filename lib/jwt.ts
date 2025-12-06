@@ -2,7 +2,7 @@
  * JWT authentication utilities
  */
 
-import jwt, { SignOptions } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 
 const JWT_SECRET: string = process.env.JWT_SECRET || 'change-this-in-production-minimum-32-characters';
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '15m'; // Short-lived access tokens (15 minutes)
@@ -24,20 +24,18 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
     console.warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
   }
   
-  // @ts-ignore - jsonwebtoken types have strict typing for expiresIn
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
-  });
+  } as any);
 }
 
 /**
  * Sign a refresh token (longer expiration)
  */
 export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  // @ts-ignore - jsonwebtoken types have strict typing for expiresIn
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_REFRESH_EXPIRES_IN,
-  });
+  } as any);
 }
 
 /**
