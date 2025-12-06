@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getAllUsers, getUserActivities, getUserStats, getCurrentUser, isAuthenticated, clearCurrentUser, createUser, updateUser, deleteUser } from '@/lib/auth';
+import { getAuthHeaders } from '@/lib/apiClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { User, Activity, Calendar, TrendingUp, LogOut, Loader2, UserPlus, Shield, BarChart3, Clock, Users, Zap, Home as HomeIcon } from 'lucide-react';
@@ -42,30 +43,29 @@ export default function AdminPage() {
   }, [router]);
 
   useEffect(() => {
-    if (viewMode === 'analytics') {
+    if (viewMode === 'analytics' && currentUser) {
       loadAnalytics();
     }
-  }, [viewMode, analyticsDays]);
+  }, [viewMode, analyticsDays, currentUser]);
 
   const loadAnalytics = async () => {
     setAnalyticsLoading(true);
+    setError('');
     try {
-      const userId = currentUser?.id;
-      if (!userId) return;
-
+      const headers = getAuthHeaders();
       const response = await fetch(`/api/auth/analytics?days=${analyticsDays}`, {
-        headers: {
-          'x-user-id': userId,
-        },
+        headers,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to load analytics');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load analytics' }));
+        throw new Error(errorData.error || 'Failed to load analytics');
       }
 
       const data = await response.json();
       setAnalytics(data);
     } catch (err: any) {
+      console.error('Analytics load error:', err);
       setError(err.message || 'Failed to load analytics');
     } finally {
       setAnalyticsLoading(false);
@@ -265,6 +265,16 @@ export default function AdminPage() {
                 <CardContent className="py-12 text-center">
                   <Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-600 mb-4" />
                   <p className="text-gray-600 dark:text-gray-400">Loading analytics...</p>
+                </CardContent>
+              </Card>
+            ) : error ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <div className="text-red-600 dark:text-red-400 mb-4">
+                    <BarChart3 className="w-12 h-12 mx-auto mb-2" />
+                    <p className="font-semibold">Error loading analytics</p>
+                    <p className="text-sm mt-2">{error}</p>
+                  </div>
                 </CardContent>
               </Card>
             ) : analytics ? (
