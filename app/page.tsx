@@ -1152,6 +1152,7 @@ export default function Home() {
           showSkip={true}
         />
       )}
+        </div>
       </div>
     </AuthGuard>
   );
