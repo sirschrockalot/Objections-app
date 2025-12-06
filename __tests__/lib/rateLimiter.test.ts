@@ -8,10 +8,13 @@ import { NextRequest, NextResponse } from 'next/server';
 // Now import the functions we're testing
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS, createRateLimitMiddleware } from '@/lib/rateLimiter';
 
+// Import the rate limit store to clear it
+// Note: We can't directly access the private store, so we'll use unique identifiers per test
 describe('Rate Limiter', () => {
   beforeEach(() => {
     // Clear rate limit store before each test
     jest.clearAllMocks();
+    // Use unique identifiers for each test to avoid interference
   });
 
   describe('checkRateLimit', () => {

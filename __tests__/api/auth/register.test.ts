@@ -36,6 +36,16 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/passwordValidation', () => ({
+  validatePassword: jest.fn(() => ({ valid: true, error: null })),
+}));
+jest.mock('@/lib/inputValidation', () => ({
+  sanitizeEmail: jest.fn((email) => email || null),
+}));
+jest.mock('@/lib/errorHandler', () => ({
+  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  logError: jest.fn(),
+}));
 
 // Now import after mocks
 import { POST } from '@/app/api/auth/register/route';
@@ -45,6 +55,8 @@ import User from '@/lib/models/User';
 import bcrypt from 'bcryptjs';
 import { signToken, signRefreshToken } from '@/lib/jwt';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { validatePassword } from '@/lib/passwordValidation';
+import { sanitizeEmail } from '@/lib/inputValidation';
 
 describe('/api/auth/register', () => {
   beforeEach(() => {
@@ -54,9 +66,13 @@ describe('/api/auth/register', () => {
     );
     (signToken as jest.Mock).mockReturnValue('mock-jwt-token');
     (signRefreshToken as jest.Mock).mockReturnValue('mock-refresh-token');
+    (sanitizeEmail as jest.Mock).mockImplementation((email) => email || null);
+    (validatePassword as jest.Mock).mockReturnValue({ valid: true, error: null });
   });
 
   it('should return 400 if username is not a valid email', async () => {
+    (sanitizeEmail as jest.Mock).mockReturnValue(null);
+
     const request = new NextRequest('http://localhost/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
@@ -73,6 +89,12 @@ describe('/api/auth/register', () => {
   });
 
   it('should return 400 if password is too short', async () => {
+    (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
+    (validatePassword as jest.Mock).mockReturnValue({
+      valid: false,
+      error: 'Password must be at least 12 characters long',
+    });
+
     const request = new NextRequest('http://localhost/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
@@ -85,7 +107,7 @@ describe('/api/auth/register', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('Password must be at least 12 characters');
+    expect(data.error).toBe('Password must be at least 12 characters long');
   });
 
   it('should return 400 if user already exists', async () => {
@@ -95,6 +117,7 @@ describe('/api/auth/register', () => {
     };
 
     (User.findOne as jest.Mock).mockResolvedValue(mockExistingUser);
+    (sanitizeEmail as jest.Mock).mockReturnValue('existing@example.com');
 
     const request = new NextRequest('http://localhost/api/auth/register', {
       method: 'POST',
@@ -114,6 +137,7 @@ describe('/api/auth/register', () => {
   it('should successfully register a new user', async () => {
     (User.findOne as jest.Mock).mockResolvedValue(null);
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
+    (sanitizeEmail as jest.Mock).mockReturnValue('newuser@example.com');
 
     const mockCreatedUser = {
       _id: 'newuser123',

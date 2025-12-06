@@ -33,6 +33,18 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/accountLockout', () => ({
+  recordFailedAttempt: jest.fn(() => ({ locked: false })),
+  clearFailedAttempts: jest.fn(),
+  isAccountLocked: jest.fn(() => ({ locked: false })),
+}));
+jest.mock('@/lib/inputValidation', () => ({
+  sanitizeEmail: jest.fn((email) => email || null),
+}));
+jest.mock('@/lib/errorHandler', () => ({
+  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  logError: jest.fn(),
+}));
 
 // Now import after mocks
 import { POST } from '@/app/api/auth/login/route';
@@ -42,6 +54,8 @@ import User from '@/lib/models/User';
 import UserActivity from '@/lib/models/UserActivity';
 import { signToken, signRefreshToken } from '@/lib/jwt';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { recordFailedAttempt, clearFailedAttempts, isAccountLocked } from '@/lib/accountLockout';
+import { sanitizeEmail } from '@/lib/inputValidation';
 
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}) {
@@ -71,6 +85,17 @@ describe('/api/auth/login', () => {
     );
     (signToken as jest.Mock).mockReturnValue('mock-jwt-token');
     (signRefreshToken as jest.Mock).mockReturnValue('mock-refresh-token');
+    (sanitizeEmail as jest.Mock).mockImplementation((email) => {
+      // Match actual sanitizeEmail implementation - must pass regex
+      if (!email) return null;
+      const sanitized = String(email).trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(sanitized)) return null;
+      return sanitized.toLowerCase();
+    });
+    (isAccountLocked as jest.Mock).mockReturnValue({ locked: false });
+    (recordFailedAttempt as jest.Mock).mockReturnValue({ locked: false });
+    (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
   });
 
   it('should return 400 if username is missing', async () => {
@@ -80,9 +105,9 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
-
     expect(response.status).toBe(400);
+    
+    const data = await response.json().catch(() => ({}));
     expect(data.error).toBe('Username and password are required');
   });
 
@@ -127,6 +152,7 @@ describe('/api/auth/login', () => {
 
   it('should return 401 if user does not exist', async () => {
     (User.findOne as jest.Mock).mockResolvedValue(null);
+    (sanitizeEmail as jest.Mock).mockReturnValue('nonexistent@example.com');
 
     const request = createNextRequest('http://localhost/api/auth/login', {
       method: 'POST',
@@ -191,6 +217,7 @@ describe('/api/auth/login', () => {
 
     (User.findOne as jest.Mock).mockResolvedValue(mockUser);
     (UserActivity.create as jest.Mock).mockResolvedValue({});
+    // sanitizeEmail is already mocked in beforeEach with implementation
 
     const request = createNextRequest('http://localhost/api/auth/login', {
       method: 'POST',
@@ -235,6 +262,7 @@ describe('/api/auth/login', () => {
 
   it('should return 401 if user is inactive', async () => {
     (User.findOne as jest.Mock).mockResolvedValue(null);
+    (sanitizeEmail as jest.Mock).mockReturnValue('inactive@example.com');
 
     const request = createNextRequest('http://localhost/api/auth/login', {
       method: 'POST',
@@ -252,6 +280,9 @@ describe('/api/auth/login', () => {
   });
 
   it('should handle server errors gracefully', async () => {
+    const { getSafeErrorMessage, logError } = require('@/lib/errorHandler');
+    (getSafeErrorMessage as jest.Mock).mockReturnValue('Login failed. Please try again later.');
+    (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
     (User.findOne as jest.Mock).mockRejectedValue(new Error('Database error'));
 
     const request = createNextRequest('http://localhost/api/auth/login', {
@@ -266,7 +297,8 @@ describe('/api/auth/login', () => {
     const data = await response.json();
 
     expect(response.status).toBe(500);
-    expect(data.error).toBe('Database error');
+    expect(data.error).toBe('Login failed. Please try again later.');
+    expect(logError).toHaveBeenCalled();
   });
 });
 

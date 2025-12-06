@@ -51,6 +51,21 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/passwordValidation', () => ({
+  validatePassword: jest.fn(() => ({ valid: true, error: null })),
+}));
+jest.mock('@/lib/inputValidation', () => ({
+  sanitizeEmail: jest.fn((email) => email || null),
+}));
+jest.mock('@/lib/accountLockout', () => ({
+  recordFailedAttempt: jest.fn(() => ({ locked: false })),
+  clearFailedAttempts: jest.fn(),
+  isAccountLocked: jest.fn(() => ({ locked: false })),
+}));
+jest.mock('@/lib/errorHandler', () => ({
+  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  logError: jest.fn(),
+}));
 
 // Import route handlers after mocks
 import { POST as loginPOST } from '@/app/api/auth/login/route';
@@ -84,10 +99,15 @@ describe('JWT Authentication Flow Integration', () => {
         }),
       };
 
+      const { sanitizeEmail } = require('@/lib/inputValidation');
+      const { validatePassword } = require('@/lib/passwordValidation');
+      
       (User.findOne as jest.Mock).mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
       (User.create as jest.Mock).mockResolvedValue(mockUser);
       (signToken as jest.Mock).mockReturnValue('mock-jwt-token-123');
+      (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
+      (validatePassword as jest.Mock).mockReturnValue({ valid: true, error: null });
 
       // Step 1: Register
       const registerRequest = new NextRequest(
@@ -160,8 +180,12 @@ describe('JWT Authentication Flow Integration', () => {
         save: jest.fn().mockResolvedValue(true),
       };
 
+      const { UserActivity } = require('@/lib/models/UserActivity');
+      
       (User.findOne as jest.Mock).mockResolvedValue(mockUser);
+      (UserActivity.create as jest.Mock).mockResolvedValue({});
       (signToken as jest.Mock).mockReturnValue('mock-jwt-token-456');
+      (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
 
       // Step 1: Login
       const loginRequest = new NextRequest(

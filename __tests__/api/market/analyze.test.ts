@@ -65,6 +65,7 @@ jest.mock('@/lib/authMiddleware', () => {
   return {
     __esModule: true,
     requireAuth: jest.fn(),
+    requireAdmin: jest.fn(),
     createAuthErrorResponse: jest.fn((authResult) => {
       return NextResponse.json(
         { error: authResult.error || 'Authentication failed' },
@@ -242,6 +243,8 @@ describe('/api/market/analyze', () => {
     });
 
     it('should require address', async () => {
+      mockSanitizeString.mockReturnValue(null); // Invalid address
+      
       const request = new NextRequest('http://localhost/api/market/analyze', {
         method: 'POST',
         body: JSON.stringify({}),

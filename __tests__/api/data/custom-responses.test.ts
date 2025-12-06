@@ -38,6 +38,14 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/inputValidation', () => ({
+  sanitizeString: jest.fn((str, maxLength) => str || null),
+  sanitizeObjectId: jest.fn((id) => id || null),
+}));
+jest.mock('@/lib/errorHandler', () => ({
+  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  logError: jest.fn(),
+}));
 
 // Now import after mocks
 import { GET, POST } from '@/app/api/data/custom-responses/route';

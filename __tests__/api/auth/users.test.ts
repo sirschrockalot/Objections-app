@@ -42,6 +42,17 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/passwordValidation', () => ({
+  validatePassword: jest.fn(() => ({ valid: true, error: null })),
+}));
+jest.mock('@/lib/inputValidation', () => ({
+  sanitizeEmail: jest.fn((email) => email || null),
+  sanitizeString: jest.fn((str) => str || null),
+}));
+jest.mock('@/lib/errorHandler', () => ({
+  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  logError: jest.fn(),
+}));
 
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}) {
@@ -58,6 +69,10 @@ function createNextRequest(url: string, options: { method?: string; body?: any; 
   );
 }
 
+// Import after mocks
+import { GET, POST } from '@/app/api/auth/users/route';
+import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
+
 describe('/api/auth/users', () => {
   const mockRateLimit = {
     allowed: true,
@@ -69,6 +84,11 @@ describe('/api/auth/users', () => {
     (createRateLimitMiddleware as jest.Mock).mockReturnValue(
       jest.fn().mockResolvedValue(mockRateLimit)
     );
+    (requireAdmin as jest.Mock).mockResolvedValue({
+      authenticated: true,
+      userId: 'admin123',
+      isAdmin: true,
+    });
   });
 
   describe('GET - List users', () => {
