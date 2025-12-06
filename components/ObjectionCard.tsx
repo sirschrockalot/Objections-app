@@ -12,6 +12,7 @@ import ResponseComparison from './ResponseComparison';
 import ResponseTemplateBuilder from './ResponseTemplateBuilder';
 import CommentsSection from './CommentsSection';
 import ReviewDueBadge from './ReviewDueBadge';
+import VideoRecommendations from './VideoRecommendations';
 import { useSwipe } from '@/hooks/useSwipe';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
@@ -521,6 +522,13 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Video Recommendations */}
+          <VideoRecommendations
+            category={objection.category}
+            difficulty={objection.difficulty}
+            objectionText={objection.text}
+          />
         </CardContent>
       </Card>
 

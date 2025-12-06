@@ -1,0 +1,116 @@
+# Automatic YouTube Video Population Feature
+
+## Overview
+
+This feature automatically searches YouTube channels from Andy Elliott, Eric Cline, and Tony Mont, finds relevant videos about objection handling, and uses AI to categorize them by objection type and difficulty level.
+
+## How It Works
+
+1. **YouTube Data API Integration**:
+   - Searches each creator's channel for videos
+   - Uses keywords like "objection", "sales objection", "price objection", etc.
+   - Fetches video details (title, description, URL, thumbnail)
+
+2. **AI Categorization**:
+   - Uses OpenAI GPT-4o-mini to analyze each video
+   - Determines which objection categories it covers (Price, Timing, Trust, etc.)
+   - Assigns difficulty level (beginner, intermediate, advanced)
+   - Generates descriptions
+
+3. **Automatic File Generation**:
+   - Creates `data/videoRecommendations.ts` with all categorized videos
+   - Organizes by category and difficulty
+   - Ready to use immediately
+
+## Setup
+
+### 1. Get YouTube Data API Key
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or use existing)
+3. Enable "YouTube Data API v3"
+4. Create an API key
+5. Add to `.env.local`:
+   ```env
+   YOUTUBE_API_KEY=your_api_key_here
+   ```
+
+See `YOUTUBE_API_SETUP.md` for detailed instructions.
+
+### 2. Ensure OpenAI API Key is Set
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+# OR
+NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+```
+
+### 3. Run the Script
+
+```bash
+npx tsx scripts/auto-populate-video-recommendations.ts
+```
+
+## What the Script Does
+
+1. **Fetches Channel IDs**: Gets the channel ID for each creator
+2. **Searches Videos**: Searches each channel for relevant videos (30-50 per channel)
+3. **Categorizes with AI**: Uses OpenAI to analyze and categorize each video
+4. **Generates File**: Creates `data/videoRecommendations.ts` with all videos
+
+## Output
+
+The script generates a complete `data/videoRecommendations.ts` file with:
+- All relevant videos from the three channels
+- Proper categorization by objection type
+- Difficulty levels assigned
+- Descriptions generated
+- Thumbnails included
+
+## Cost Estimate
+
+- **YouTube Data API**: Free (within daily quota of 10,000 units)
+- **OpenAI API**: ~$0.01-0.02 per 100 videos (using GPT-4o-mini)
+- **Total for ~100 videos**: Less than $0.05
+
+## Features
+
+✅ **Automatic Discovery**: Finds videos you might miss manually  
+✅ **AI Categorization**: Accurately categorizes videos by objection type  
+✅ **Difficulty Assessment**: Assigns appropriate difficulty levels  
+✅ **Smart Filtering**: Only includes relevant objection handling videos  
+✅ **Rate Limiting**: Respects API rate limits  
+✅ **Error Handling**: Gracefully handles API errors  
+
+## Troubleshooting
+
+### "API key not valid"
+- Verify the API key is correct
+- Ensure YouTube Data API v3 is enabled
+- Check API key restrictions
+
+### "Quota exceeded"
+- You've hit the daily quota (10,000 units)
+- Wait 24 hours or request quota increase
+- Reduce `maxResults` in the script
+
+### "No videos found"
+- Check channel handles are correct
+- Verify channels exist and have videos
+- Try searching manually on YouTube
+
+## Manual Alternative
+
+If you prefer manual control, see:
+- `scripts/find-youtube-videos.md` for manual instructions
+- `VIDEO_RECOMMENDATIONS_FEATURE.md` for feature overview
+
+## Future Enhancements
+
+Potential improvements:
+- Scheduled auto-updates (weekly/monthly)
+- Video quality scoring
+- User feedback integration
+- Playlist generation
+- Video preview embeds
+

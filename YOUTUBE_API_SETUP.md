@@ -1,0 +1,124 @@
+# YouTube Data API Setup Guide
+
+This guide explains how to set up the YouTube Data API to automatically search and categorize videos for the objection handling recommendations feature.
+
+## Prerequisites
+
+1. Google Cloud Platform account
+2. YouTube Data API v3 enabled
+3. API key generated
+
+## Step-by-Step Setup
+
+### 1. Create a Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click "Select a project" → "New Project"
+3. Enter a project name (e.g., "Objections App")
+4. Click "Create"
+
+### 2. Enable YouTube Data API v3
+
+1. In the Google Cloud Console, go to "APIs & Services" → "Library"
+2. Search for "YouTube Data API v3"
+3. Click on it and click "Enable"
+
+### 3. Create API Credentials
+
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "API Key"
+3. Copy the API key
+4. (Optional) Click "Restrict Key" to:
+   - Restrict to "YouTube Data API v3"
+   - Restrict to specific IP addresses (for production)
+
+### 4. Add API Key to Environment Variables
+
+Add the API key to your `.env.local` file:
+
+```env
+YOUTUBE_API_KEY=your_youtube_api_key_here
+```
+
+Also ensure you have your OpenAI API key:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+## Usage
+
+Once the API key is configured, run the auto-population script:
+
+```bash
+npx tsx scripts/auto-populate-video-recommendations.ts
+```
+
+The script will:
+1. Fetch channel IDs for all three creators
+2. Search each channel for relevant videos
+3. Use AI to categorize videos by objection type and difficulty
+4. Generate the `data/videoRecommendations.ts` file automatically
+
+## API Quotas
+
+YouTube Data API has quotas:
+- **Default quota**: 10,000 units per day
+- **Search request**: 100 units
+- **Video details request**: 1 unit
+
+The script is designed to:
+- Search efficiently (batches searches)
+- Respect rate limits (delays between requests)
+- Process ~30-50 videos per channel
+
+## Troubleshooting
+
+### "API key not valid"
+- Check that the API key is correct
+- Ensure YouTube Data API v3 is enabled
+- Check if the key has restrictions that need to be adjusted
+
+### "Quota exceeded"
+- You've hit the daily quota limit
+- Wait 24 hours or request a quota increase
+- Reduce the number of videos searched (modify `maxResults` in the script)
+
+### "Channel not found"
+- Channel handles might have changed
+- Try searching manually on YouTube to verify the channel exists
+- Update the channel handles in the script if needed
+
+### Rate Limiting
+- The script includes delays between requests
+- If you see rate limit errors, increase the delay times in the script
+
+## Cost
+
+- **YouTube Data API**: Free (within quota limits)
+- **OpenAI API**: ~$0.15 per 1M input tokens (GPT-4o-mini)
+  - Each video categorization uses ~500-1000 tokens
+  - Processing 100 videos ≈ $0.01-0.02
+
+## Security Best Practices
+
+1. **Never commit API keys to git**
+   - Keep them in `.env.local` (already in `.gitignore`)
+   - Use environment variables in production
+
+2. **Restrict API keys**
+   - Restrict to specific APIs (YouTube Data API v3)
+   - Restrict to specific IPs for production
+
+3. **Rotate keys regularly**
+   - Change keys if they're exposed
+   - Use different keys for development and production
+
+## Alternative: Manual Video Addition
+
+If you prefer not to use the API, you can manually add videos:
+1. Visit each channel URL
+2. Find relevant videos
+3. Update `data/videoRecommendations.ts` manually
+4. See `scripts/find-youtube-videos.md` for instructions
+

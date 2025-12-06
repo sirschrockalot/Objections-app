@@ -1,0 +1,9 @@
+OBJECTION: "Price is too high."
+REBUTTAL: "Totally understand. Most investors feel that way until they walk it. After seeing the condition in person, they usually realize there's more spread than they thought. Let's do this — come walk it and give me your best number. If the seller agrees, I'll lock it in for you."
+---
+OBJECTION: "I need to run the numbers first."
+REBUTTAL: "No problem at all — I sent you everything you need. While you look at it, let's go ahead and schedule a walkthrough. If the numbers don't match what you want after seeing it, no harm done."
+---
+OBJECTION: "I'm not interested."
+REBUTTAL: "Got it — just so I don't send you stuff that doesn't fit, is it the price, location, or condition that makes this one a pass?"
+
