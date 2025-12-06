@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       text: sanitizedText,
       isCustom: response.isCustom ?? true,
       createdAt: new Date(response.createdAt || Date.now()),
-      createdBy: sanitizeString(response.createdBy, 255),
+      createdBy: sanitizeString(response.createdBy, 255) || undefined,
       upvotes: response.upvotes || 0,
       upvotedBy: response.upvotedBy || [],
     });
