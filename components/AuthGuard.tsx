@@ -5,6 +5,8 @@ import { isAuthenticated, getCurrentUser, fetchCurrentUser } from '@/lib/auth';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ForcePasswordChangeModal from './ForcePasswordChangeModal';
+import SessionTimeoutWarning from './SessionTimeoutWarning';
+import { initializeActivityTracking, stopActivityTracking, resetSession } from '@/lib/sessionTimeout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
@@ -21,12 +23,18 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
+    let activityCleanup: (() => void) | null = null;
+
     // Check authentication status and password change requirement
     const checkAuth = async () => {
       const auth = isAuthenticated();
       setAuthenticated(auth);
       
       if (auth) {
+        // Initialize session timeout tracking
+        resetSession();
+        activityCleanup = initializeActivityTracking();
+        
         // Check if user must change password
         try {
           const fullUser = await fetchCurrentUser();
@@ -39,12 +47,15 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           console.error('Error checking password change requirement:', error);
           setMustChangePassword(false);
         }
+      } else {
+        // Stop tracking if not authenticated
+        stopActivityTracking();
       }
       
       setIsChecking(false);
     };
 
-    checkAuth();
+    void checkAuth();
 
     // Listen for storage changes (for multi-tab support)
     const handleStorageChange = (e: StorageEvent) => {
@@ -54,11 +65,21 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      if (activityCleanup) {
+        activityCleanup();
+      }
+      stopActivityTracking();
+    };
   }, []);
 
   const handleAuthSuccess = async () => {
     setAuthenticated(true);
+    // Reset session timeout on successful login
+    resetSession();
+    initializeActivityTracking();
+    
     // Check if password change is required after login
     try {
       const fullUser = await fetchCurrentUser();
@@ -132,6 +153,18 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     return <ForcePasswordChangeModal onPasswordChanged={handlePasswordChanged} />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <SessionTimeoutWarning
+        onExtend={() => {
+          resetSession();
+        }}
+        onLogout={async () => {
+          setAuthenticated(false);
+        }}
+      />
+      {children}
+    </>
+  );
 }
 
