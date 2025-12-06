@@ -24,8 +24,8 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
     console.warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
   }
   
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+  return jwt.sign(payload, JWT_SECRET as string, {
+    expiresIn: JWT_EXPIRES_IN as string,
   });
 }
 
@@ -33,8 +33,8 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
  * Sign a refresh token (longer expiration)
  */
 export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_REFRESH_EXPIRES_IN,
+  return jwt.sign(payload, JWT_SECRET as string, {
+    expiresIn: JWT_REFRESH_EXPIRES_IN as string,
   });
 }
 
@@ -43,7 +43,7 @@ export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): stri
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
     return decoded;
   } catch (error) {
     // Token is invalid or expired
@@ -82,7 +82,7 @@ export function isTokenExpired(token: string): boolean {
  */
 export function verifyRefreshToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
     return decoded;
   } catch (error) {
     // Token is invalid or expired
