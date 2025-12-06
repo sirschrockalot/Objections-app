@@ -4,9 +4,9 @@
 
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production-minimum-32-characters';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m'; // Short-lived access tokens (15 minutes)
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d'; // Long-lived refresh tokens (7 days)
+const JWT_SECRET: string = process.env.JWT_SECRET || 'change-this-in-production-minimum-32-characters';
+const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '15m'; // Short-lived access tokens (15 minutes)
+const JWT_REFRESH_EXPIRES_IN: string = process.env.JWT_REFRESH_EXPIRES_IN || '7d'; // Long-lived refresh tokens (7 days)
 
 export interface JWTPayload {
   userId: string;
@@ -24,8 +24,8 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
     console.warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
   }
   
-  return jwt.sign(payload, JWT_SECRET as string, {
-    expiresIn: JWT_EXPIRES_IN as string,
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
   });
 }
 
@@ -33,8 +33,8 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
  * Sign a refresh token (longer expiration)
  */
 export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, JWT_SECRET as string, {
-    expiresIn: JWT_REFRESH_EXPIRES_IN as string,
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_REFRESH_EXPIRES_IN,
   });
 }
 
@@ -43,7 +43,7 @@ export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): stri
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
     return decoded;
   } catch (error) {
     // Token is invalid or expired
@@ -82,7 +82,7 @@ export function isTokenExpired(token: string): boolean {
  */
 export function verifyRefreshToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET as string) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
     return decoded;
   } catch (error) {
     // Token is invalid or expired
