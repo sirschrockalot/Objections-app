@@ -105,33 +105,42 @@ describe('JWT Authentication Flow Integration', () => {
 
   describe('Complete Auth Flow', () => {
     it('should register user, receive token, and use token for authenticated requests', async () => {
+      // Create a mock user that matches what the register route expects
+      const createdAtDate = new Date('2024-01-01');
       const mockUser = {
-        _id: 'user123',
+        _id: {
+          toString: jest.fn().mockReturnValue('user123'),
+        },
         username: 'test@example.com',
         email: 'test@example.com',
         passwordHash: 'hashedpassword',
         isActive: true,
         isAdmin: false,
-        createdAt: new Date('2024-01-01'),
+        createdAt: createdAtDate, // Use actual Date object so toISOString() works
+        lastLoginAt: undefined,
         toObject: jest.fn().mockReturnValue({
           _id: 'user123',
           username: 'test@example.com',
           email: 'test@example.com',
           isActive: true,
-          createdAt: new Date('2024-01-01'),
+          isAdmin: false,
+          createdAt: createdAtDate,
+          lastLoginAt: undefined,
+          passwordHash: 'hashedpassword',
         }),
       };
 
       const { sanitizeEmail } = require('@/lib/inputValidation');
       const { validatePassword } = require('@/lib/passwordValidation');
-      
       const { signRefreshToken } = require('@/lib/jwt');
       
+      // Reset mocks
       (User.findOne as jest.Mock).mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
       (User.create as jest.Mock).mockResolvedValue(mockUser);
       (signToken as jest.Mock).mockReturnValue('mock-jwt-token-123');
       (signRefreshToken as jest.Mock).mockReturnValue('mock-refresh-token-123');
+      // sanitizeEmail is already mocked globally, but ensure it returns the email for this test
       (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
       (validatePassword as jest.Mock).mockReturnValue({ valid: true, error: null });
 
@@ -148,11 +157,21 @@ describe('JWT Authentication Flow Integration', () => {
       );
 
       const registerResponse = await registerPOST(registerRequest);
-      const registerData = await registerResponse.json();
-
+      
       expect(registerResponse.status).toBe(201);
+      
+      // Parse response body once
+      const registerData = await registerResponse.json();
+      
+      // Debug if data is missing
+      if (!registerData || !registerData.user) {
+        console.log('Register response data:', JSON.stringify(registerData, null, 2));
+      }
+      
+      expect(registerData).toBeDefined();
       expect(registerData.user).toBeDefined();
       expect(registerData.token).toBe('mock-jwt-token-123');
+      expect(registerData.refreshToken).toBe('mock-refresh-token-123');
       expect(signToken).toHaveBeenCalledWith({
         userId: 'user123',
         isAdmin: false,
@@ -310,7 +329,9 @@ describe('JWT Authentication Flow Integration', () => {
   describe('Token Security', () => {
     it('should include user ID and admin status in token', async () => {
       const mockUser = {
-        _id: 'admin123',
+        _id: {
+          toString: jest.fn().mockReturnValue('admin123'),
+        },
         username: 'admin@example.com',
         email: 'admin@example.com',
         passwordHash: 'hashedpassword',
