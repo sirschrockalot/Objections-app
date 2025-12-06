@@ -40,24 +40,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-    return NextResponse.json({
-      user: {
-        id: user._id.toString(),
-        username: user.username,
-        email: user.email,
-        createdAt: user.createdAt.toISOString(),
-        lastLoginAt: user.lastLoginAt?.toISOString(),
-        isActive: user.isActive,
-        isAdmin: user.isAdmin || false,
-        mustChangePassword: user.mustChangePassword || false,
-      },
-    });
-  } catch (error: any) {
-    console.error('Get user error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get user' },
-      { status: 500 }
-    );
-  }
-}
-
