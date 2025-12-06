@@ -26,12 +26,21 @@ export default function VideoRecommendations({
 }: VideoRecommendationsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const recommendations = getVideoRecommendations(category, difficulty);
+  
+  // Feature flag: Allow YouTube links to be clicked
+  const youtubeLinksEnabled = process.env.NEXT_PUBLIC_ENABLE_YOUTUBE_LINKS === 'true';
 
   if (recommendations.length === 0) {
     return null;
   }
 
   const handleVideoClick = (video: VideoRecommendation) => {
+    // Check if YouTube links are enabled
+    if (!youtubeLinksEnabled) {
+      // Show a message or do nothing when disabled
+      return;
+    }
+
     // Track video click for analytics (if gtag is available)
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('event', 'video_click', {
@@ -114,18 +123,36 @@ export default function VideoRecommendations({
                     <Button
                       size="sm"
                       onClick={() => handleVideoClick(video)}
-                      className="flex-shrink-0 flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white"
-                      aria-label={`Watch ${video.title} by ${video.creator}`}
+                      disabled={!youtubeLinksEnabled}
+                      className={`flex-shrink-0 flex items-center gap-1 ${
+                        youtubeLinksEnabled
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                      }`}
+                      aria-label={
+                        youtubeLinksEnabled
+                          ? `Watch ${video.title} by ${video.creator}`
+                          : `Video links are currently disabled. Coming soon!`
+                      }
+                      title={
+                        youtubeLinksEnabled
+                          ? `Watch ${video.title} by ${video.creator}`
+                          : 'Video links coming soon!'
+                      }
                     >
                       <Play className="w-3 h-3" />
-                      Watch
+                      {youtubeLinksEnabled ? 'Watch' : 'Coming Soon'}
                     </Button>
                   </div>
                 </motion.div>
               ))}
               <div className="pt-2 border-t border-gray-200">
                 <p className="text-xs text-gray-500 text-center">
-                  💡 Tip: Watch these videos to improve your objection handling skills
+                  {youtubeLinksEnabled ? (
+                    <>💡 Tip: Watch these videos to improve your objection handling skills</>
+                  ) : (
+                    <>💡 Video links coming soon! Stay tuned for access to expert content.</>
+                  )}
                 </p>
               </div>
             </CardContent>
