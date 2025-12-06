@@ -17,7 +17,7 @@ jest.mock('@/lib/models/User', () => ({
   },
 }));
 jest.mock('bcryptjs', () => ({
-  hash: jest.fn(),
+  hash: jest.fn().mockResolvedValue('hashedpassword'),
   compare: jest.fn(),
 }));
 jest.mock('@/lib/authMiddleware', () => {
@@ -35,7 +35,7 @@ jest.mock('@/lib/authMiddleware', () => {
   };
 });
 jest.mock('@/lib/rateLimiter', () => ({
-  createRateLimitMiddleware: jest.fn(),
+  createRateLimitMiddleware: jest.fn(() => jest.fn().mockResolvedValue({ allowed: true, remaining: 99 })),
   RATE_LIMITS: {
     auth: { maxRequests: 5, windowMs: 900000 },
     api: { maxRequests: 100, windowMs: 60000 },
@@ -57,21 +57,24 @@ jest.mock('@/lib/errorHandler', () => ({
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}) {
   const { method = 'GET', body, headers = {} } = options;
-  return new NextRequest(
-    new Request(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-  );
+  return new NextRequest(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 }
 
 // Import after mocks
 import { GET, POST } from '@/app/api/auth/users/route';
+import { NextRequest } from 'next/server';
 import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
+import { createRateLimitMiddleware } from '@/lib/rateLimiter';
+import { getResponseBody } from '@/__tests__/utils/testHelpers';
+import User from '@/lib/models/User';
+import bcrypt from 'bcryptjs';
 
 describe('/api/auth/users', () => {
   const mockRateLimit = {
@@ -104,7 +107,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(403);
       expect(data.error).toBe('Admin access required');
@@ -120,7 +123,7 @@ describe('/api/auth/users', () => {
       const request = createNextRequest('http://localhost/api/auth/users');
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(401);
       expect(data.error).toBe('Authentication required');
@@ -154,7 +157,9 @@ describe('/api/auth/users', () => {
 
       (User.find as jest.Mock).mockReturnValue({
         select: jest.fn().mockReturnValue({
-          sort: jest.fn().mockResolvedValue(mockUsers),
+          sort: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue(mockUsers),
+          }),
         }),
       });
 
@@ -163,7 +168,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(200);
       expect(data.users).toHaveLength(2);
@@ -189,7 +194,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(403);
       expect(data.error).toBe('Admin access required');
@@ -212,7 +217,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(400);
       expect(data.error).toBe('Username must be a valid email address');
@@ -225,6 +230,13 @@ describe('/api/auth/users', () => {
         isAdmin: true,
       });
 
+      // Mock password validation to return error for short password
+      const { validatePassword } = require('@/lib/passwordValidation');
+      (validatePassword as jest.Mock).mockReturnValue({
+        valid: false,
+        error: 'Password must be at least 12 characters',
+      });
+
       const request = createNextRequest('http://localhost/api/auth/users', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer admin-token' },
@@ -235,7 +247,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(400);
       expect(data.error).toBe('Password must be at least 12 characters');
@@ -250,8 +262,15 @@ describe('/api/auth/users', () => {
 
       (User.findOne as jest.Mock).mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
+      
+      // Mock password validation to return valid
+      const { validatePassword } = require('@/lib/passwordValidation');
+      (validatePassword as jest.Mock).mockReturnValue({
+        valid: true,
+        error: null,
+      });
 
-      const mockCreatedUser = {
+      const mockUserObj = {
         _id: 'newuser123',
         username: 'newuser@example.com',
         email: 'newuser@example.com',
@@ -259,16 +278,12 @@ describe('/api/auth/users', () => {
         isAdmin: false,
         mustChangePassword: true,
         createdAt: new Date('2024-01-01'),
-        toObject: jest.fn().mockReturnValue({
-          _id: 'newuser123',
-          username: 'newuser@example.com',
-          email: 'newuser@example.com',
-          isActive: true,
-          isAdmin: false,
-          mustChangePassword: true,
-          createdAt: new Date('2024-01-01'),
-          passwordHash: 'hashedpassword',
-        }),
+        passwordHash: 'hashedpassword',
+      };
+      
+      const mockCreatedUser = {
+        ...mockUserObj,
+        toObject: jest.fn().mockReturnValue(mockUserObj),
       };
 
       (User.create as jest.Mock).mockResolvedValue(mockCreatedUser);
@@ -283,7 +298,7 @@ describe('/api/auth/users', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(201);
       expect(data.user).toBeDefined();

@@ -60,9 +60,20 @@ jest.mock('@/lib/inputValidation', () => ({
   sanitizeEmail: jest.fn((email) => {
     if (!email) return null;
     const sanitized = String(email).trim();
+    // Limit length to 255 (as per actual implementation)
+    const limited = sanitized.length > 255 ? sanitized.substring(0, 255) : sanitized;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(sanitized)) return null;
-    return sanitized.toLowerCase();
+    if (!emailRegex.test(limited)) return null;
+    return limited.toLowerCase();
+  }),
+  sanitizeString: jest.fn((str, maxLength = 1000) => {
+    if (!str) return null;
+    let sanitized = String(str).trim();
+    if (sanitized.length > maxLength) {
+      sanitized = sanitized.substring(0, maxLength);
+    }
+    sanitized = sanitized.replace(/\0/g, '');
+    return sanitized;
   }),
 }));
 jest.mock('@/lib/accountLockout', () => ({
@@ -145,16 +156,14 @@ describe('JWT Authentication Flow Integration', () => {
       (validatePassword as jest.Mock).mockReturnValue({ valid: true, error: null });
 
       // Step 1: Register
-      const registerRequest = new NextRequest(
-        new Request('http://localhost/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: 'test@example.com',
-            password: 'password123',
-          }),
-        })
-      );
+      const registerRequest = new NextRequest('http://localhost/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'test@example.com',
+          password: 'password123',
+        }),
+      });
 
       const registerResponse = await registerPOST(registerRequest);
       
@@ -187,14 +196,12 @@ describe('JWT Authentication Flow Integration', () => {
         email: 'test@example.com',
       });
 
-      const meRequest = new NextRequest(
-        new Request('http://localhost/api/auth/me', {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer mock-jwt-token-123',
-          },
-        })
-      );
+      const meRequest = new NextRequest('http://localhost/api/auth/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer mock-jwt-token-123',
+        },
+      });
 
       const meResponse = await meGET(meRequest);
       const meData = await meResponse.json();
@@ -232,16 +239,16 @@ describe('JWT Authentication Flow Integration', () => {
       (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
 
       // Step 1: Login
-      const loginRequest = new NextRequest(
-        new Request('http://localhost/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: 'test@example.com',
-            password: 'password123',
-          }),
-        })
-      );
+      const loginBody = JSON.stringify({
+        username: 'test@example.com',
+        password: 'password123',
+      });
+      
+      const loginRequest = new NextRequest('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: loginBody,
+      });
 
       const loginResponse = await loginPOST(loginRequest);
       const loginData = await loginResponse.json();
@@ -264,14 +271,12 @@ describe('JWT Authentication Flow Integration', () => {
         email: 'test@example.com',
       });
 
-      const meRequest = new NextRequest(
-        new Request('http://localhost/api/auth/me', {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer mock-jwt-token-456',
-          },
-        })
-      );
+      const meRequest = new NextRequest('http://localhost/api/auth/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer mock-jwt-token-456',
+        },
+      });
 
       const meResponse = await meGET(meRequest);
       const meData = await meResponse.json();
@@ -289,11 +294,9 @@ describe('JWT Authentication Flow Integration', () => {
         statusCode: 401,
       });
 
-      const meRequest = new NextRequest(
-        new Request('http://localhost/api/auth/me', {
-          method: 'GET',
-        })
-      );
+      const meRequest = new NextRequest('http://localhost/api/auth/me', {
+        method: 'GET',
+      });
 
       const meResponse = await meGET(meRequest);
       const meData = await meResponse.json();
@@ -309,14 +312,12 @@ describe('JWT Authentication Flow Integration', () => {
         statusCode: 401,
       });
 
-      const meRequest = new NextRequest(
-        new Request('http://localhost/api/auth/me', {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer invalid-token',
-          },
-        })
-      );
+      const meRequest = new NextRequest('http://localhost/api/auth/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer invalid-token',
+        },
+      });
 
       const meResponse = await meGET(meRequest);
       const meData = await meResponse.json();
@@ -346,36 +347,38 @@ describe('JWT Authentication Flow Integration', () => {
       const UserActivity = require('@/lib/models/UserActivity').default;
       const { sanitizeEmail } = require('@/lib/inputValidation');
       const { recordFailedAttempt, clearFailedAttempts, isAccountLocked } = require('@/lib/accountLockout');
-      
       const { signRefreshToken } = require('@/lib/jwt');
       
+      // Ensure sanitizeEmail returns valid email - use mockImplementation to override the global mock
+      (sanitizeEmail as jest.Mock).mockImplementation((email) => {
+        if (!email) return null;
+        const sanitized = String(email).trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(sanitized)) return null;
+        return sanitized.toLowerCase();
+      });
+      (isAccountLocked as jest.Mock).mockReturnValue({ locked: false });
+      (recordFailedAttempt as jest.Mock).mockReturnValue({ locked: false });
+      (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
       (User.findOne as jest.Mock).mockResolvedValue(mockUser);
       (UserActivity.create as jest.Mock).mockResolvedValue({});
       (signToken as jest.Mock).mockReturnValue('admin-token');
       (signRefreshToken as jest.Mock).mockReturnValue('admin-refresh-token');
-      (sanitizeEmail as jest.Mock).mockReturnValue('admin@example.com');
-      (isAccountLocked as jest.Mock).mockReturnValue({ locked: false });
-      (recordFailedAttempt as jest.Mock).mockReturnValue({ locked: false });
-      (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
 
-      const loginRequest = new NextRequest(
-        new Request('http://localhost/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: 'admin@example.com',
-            password: 'password123',
-          }),
-        })
-      );
+      // Create request with proper body handling for NextRequest
+      const requestBody = JSON.stringify({
+        username: 'admin@example.com',
+        password: 'password123',
+      });
+      
+      const loginRequest = new NextRequest('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: requestBody,
+      });
 
       const loginResponse = await loginPOST(loginRequest);
       const loginData = await loginResponse.json();
-      
-      // Debug: Check response if login failed
-      if (loginResponse.status !== 200) {
-        console.log('Login failed with status:', loginResponse.status, 'Error:', JSON.stringify(loginData, null, 2));
-      }
 
       expect(loginResponse.status).toBe(200);
       expect(signToken).toHaveBeenCalledWith({

@@ -161,17 +161,41 @@ const ResponseClass = class Response {
 // NextResponse.json calls Response.json internally, then wraps it
 // We need to ensure the response's json() method returns the original body
 ResponseClass.json = function(body, init = {}) {
-  const bodyString = JSON.stringify(body)
+  const bodyString = typeof body === 'string' ? body : JSON.stringify(body)
   const response = new ResponseClass(bodyString, init)
   // Store original body and override json() to return it
-  response._body = body
+  response._body = typeof body === 'object' ? body : (bodyString ? JSON.parse(bodyString) : {})
   response.json = async function() {
-    return this._body
+    return this._body || {}
   }
   return response
 }
 
 global.Response = ResponseClass
+
+// Mock NextResponse to use our Response mock
+jest.mock('next/server', () => {
+  const actual = jest.requireActual('next/server');
+  return {
+    ...actual,
+    NextResponse: class NextResponse extends ResponseClass {
+      static json(body, init = {}) {
+        return ResponseClass.json(body, init);
+      }
+      static redirect(url, status = 307) {
+        return new ResponseClass(null, { status, headers: { Location: url } });
+      }
+      static next(init = {}) {
+        return new ResponseClass(null, init);
+      }
+    },
+    NextRequest: class NextRequest extends global.Request {
+      constructor(url, init = {}) {
+        super(url, init);
+      }
+    },
+  };
+});
 
 // Mock localStorage
 const localStorageMock = {

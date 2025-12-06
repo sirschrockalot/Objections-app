@@ -23,13 +23,12 @@ jest.mock('@/lib/jwt', () => ({
   signRefreshToken: jest.fn(),
   verifyToken: jest.fn(),
 }));
-const mockRateLimitResult = {
-  allowed: true,
-  remaining: 4,
-};
 
 jest.mock('@/lib/rateLimiter', () => ({
-  createRateLimitMiddleware: jest.fn(() => jest.fn().mockResolvedValue(mockRateLimitResult)),
+  createRateLimitMiddleware: jest.fn(() => jest.fn().mockResolvedValue({
+    allowed: true,
+    remaining: 4,
+  })),
   RATE_LIMITS: {
     auth: { maxRequests: 5, windowMs: 900000 },
     api: { maxRequests: 100, windowMs: 60000 },
@@ -59,6 +58,11 @@ import { validatePassword } from '@/lib/passwordValidation';
 import { sanitizeEmail } from '@/lib/inputValidation';
 
 describe('/api/auth/register', () => {
+  const mockRateLimitResult = {
+    allowed: true,
+    remaining: 4,
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     (createRateLimitMiddleware as jest.Mock).mockReturnValue(

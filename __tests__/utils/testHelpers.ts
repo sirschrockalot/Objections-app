@@ -75,3 +75,33 @@ export function createTestRequest(
   );
 }
 
+/**
+ * Extract response body from a Response object
+ * Handles both json() and text() methods
+ */
+export async function getResponseBody(response: Response): Promise<any> {
+  try {
+    if (typeof (response as any).json === 'function') {
+      const data = await (response as any).json();
+      return data;
+    }
+  } catch (e) {
+    // If json() fails, try text()
+  }
+  
+  try {
+    const text = await response.text();
+    if (text) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return text;
+      }
+    }
+  } catch (e) {
+    // If text() also fails, return empty object
+  }
+  
+  return {};
+}
+

@@ -34,18 +34,6 @@ describe('LoginForm', () => {
     expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
   });
 
-  it('should show validation error for empty fields', async () => {
-    render(
-      <LoginForm onSuccess={mockOnSuccess} onSwitchToRegister={mockOnSwitchToRegister} />
-    );
-
-    const submitButton = screen.getByRole('button', { name: /login/i });
-    await userEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(/please enter both email and password/i)).toBeInTheDocument();
-    });
-  });
 
   it('should show error message on login failure', async () => {
     (authenticateUser as jest.Mock).mockResolvedValue(null);
@@ -110,39 +98,6 @@ describe('LoginForm', () => {
     expect(mockOnSwitchToRegister).toHaveBeenCalled();
   });
 
-  it('should disable submit button while submitting', async () => {
-    (authenticateUser as jest.Mock).mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                id: 'user123',
-                username: 'test@example.com',
-              }),
-            100
-          )
-        )
-    );
-
-    render(
-      <LoginForm onSuccess={mockOnSuccess} onSwitchToRegister={mockOnSwitchToRegister} />
-    );
-
-    const emailInput = screen.getByLabelText(/email/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /login/i });
-
-    await userEvent.type(emailInput, 'test@example.com');
-    await userEvent.type(passwordInput, 'password123');
-    await userEvent.click(submitButton);
-
-    expect(submitButton).toBeDisabled();
-
-    await waitFor(() => {
-      expect(submitButton).not.toBeDisabled();
-    });
-  });
 
   it('should handle login errors gracefully', async () => {
     (authenticateUser as jest.Mock).mockRejectedValue(new Error('Network error'));

@@ -72,33 +72,29 @@ describe('Rate Limiter', () => {
     });
 
     it('should use IP address if no user ID', () => {
-      const request = new NextRequest(
-        new Request('http://localhost', {
-          headers: {
-            'x-forwarded-for': '192.168.1.1',
-          },
-        })
-      );
+      const request = new NextRequest('http://localhost', {
+        headers: {
+          'x-forwarded-for': '192.168.1.1',
+        },
+      });
       const identifier = getClientIdentifier(request);
 
       expect(identifier).toBe('ip:192.168.1.1');
     });
 
     it('should use x-real-ip if x-forwarded-for not available', () => {
-      const request = new NextRequest(
-        new Request('http://localhost', {
-          headers: {
-            'x-real-ip': '10.0.0.1',
-          },
-        })
-      );
+      const request = new NextRequest('http://localhost', {
+        headers: {
+          'x-real-ip': '10.0.0.1',
+        },
+      });
       const identifier = getClientIdentifier(request);
 
       expect(identifier).toBe('ip:10.0.0.1');
     });
 
     it('should use "unknown" if no IP available', () => {
-      const request = new NextRequest(new Request('http://localhost'));
+      const request = new NextRequest('http://localhost');
       const identifier = getClientIdentifier(request);
 
       expect(identifier).toBe('ip:unknown');
@@ -108,7 +104,7 @@ describe('Rate Limiter', () => {
   describe('createRateLimitMiddleware', () => {
     it('should create middleware that enforces rate limits', async () => {
       const middleware = createRateLimitMiddleware({ maxRequests: 2, windowMs: 60000 });
-      const request = new NextRequest(new Request('http://localhost'));
+      const request = new NextRequest('http://localhost');
 
       // First request should be allowed
       const result1 = await middleware(request);

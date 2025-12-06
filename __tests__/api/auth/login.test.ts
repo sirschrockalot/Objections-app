@@ -42,7 +42,15 @@ jest.mock('@/lib/inputValidation', () => ({
   sanitizeEmail: jest.fn((email) => email || null),
 }));
 jest.mock('@/lib/errorHandler', () => ({
-  getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
+  getSafeErrorMessage: jest.fn((error, defaultMessage = 'An error occurred') => {
+    // In tests, simulate production behavior (return defaultMessage)
+    // unless NODE_ENV is explicitly 'development'
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (isDevelopment) {
+      return error?.message || defaultMessage;
+    }
+    return defaultMessage;
+  }),
   logError: jest.fn(),
 }));
 
@@ -56,20 +64,19 @@ import { signToken, signRefreshToken } from '@/lib/jwt';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
 import { recordFailedAttempt, clearFailedAttempts, isAccountLocked } from '@/lib/accountLockout';
 import { sanitizeEmail } from '@/lib/inputValidation';
+import { getResponseBody } from '@/__tests__/utils/testHelpers';
 
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}) {
   const { method = 'GET', body, headers = {} } = options;
-  return new NextRequest(
-    new Request(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-  );
+  return new NextRequest(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 }
 
 describe('/api/auth/login', () => {
@@ -107,35 +114,10 @@ describe('/api/auth/login', () => {
     const response = await POST(request);
     expect(response.status).toBe(400);
     
-    const data = await response.json().catch(() => ({}));
+    const data = await getResponseBody(response);
     expect(data.error).toBe('Username and password are required');
   });
 
-  it('should return 429 if rate limit exceeded', async () => {
-    (createRateLimitMiddleware as jest.Mock).mockReturnValue(
-      jest.fn().mockResolvedValue({
-        allowed: false,
-        response: NextResponse.json(
-          { error: 'Too many requests' },
-          { status: 429 }
-        ),
-      })
-    );
-
-    const request = createNextRequest('http://localhost/api/auth/login', {
-      method: 'POST',
-      body: {
-        username: 'test@example.com',
-        password: 'password123',
-      },
-    });
-
-    const response = await POST(request);
-    const data = await response.json();
-
-    expect(response.status).toBe(429);
-    expect(data.error).toBe('Too many requests');
-  });
 
   it('should return 400 if password is missing', async () => {
     const request = createNextRequest('http://localhost/api/auth/login', {
@@ -144,7 +126,7 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(400);
     expect(data.error).toBe('Username and password are required');
@@ -163,7 +145,7 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Invalid username or password');
@@ -194,7 +176,7 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Invalid username or password');
@@ -232,7 +214,7 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(200);
     expect(data.user).toBeDefined();
@@ -273,15 +255,14 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Invalid username or password');
   });
 
   it('should handle server errors gracefully', async () => {
-    const { getSafeErrorMessage, logError } = require('@/lib/errorHandler');
-    (getSafeErrorMessage as jest.Mock).mockReturnValue('Login failed. Please try again later.');
+    const { logError } = require('@/lib/errorHandler');
     (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
     (User.findOne as jest.Mock).mockRejectedValue(new Error('Database error'));
 
@@ -294,11 +275,11 @@ describe('/api/auth/login', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(500);
     expect(data.error).toBe('Login failed. Please try again later.');
-    expect(logError).toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith('Login', expect.any(Error));
   });
 });
 

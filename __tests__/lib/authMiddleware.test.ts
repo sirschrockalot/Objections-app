@@ -28,15 +28,13 @@ import User from '@/lib/models/User';
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { headers?: Record<string, string> } = {}) {
   const { headers = {} } = options;
-  return new NextRequest(
-    new Request(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-    })
-  );
+  return new NextRequest(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+  });
 }
 
 describe('Authentication Middleware', () => {

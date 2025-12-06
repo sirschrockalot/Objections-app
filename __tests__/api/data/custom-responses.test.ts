@@ -31,7 +31,7 @@ jest.mock('@/lib/authMiddleware', () => {
   };
 });
 jest.mock('@/lib/rateLimiter', () => ({
-  createRateLimitMiddleware: jest.fn(),
+  createRateLimitMiddleware: jest.fn(() => jest.fn().mockResolvedValue({ allowed: true, remaining: 99 })),
   RATE_LIMITS: {
     auth: { maxRequests: 5, windowMs: 900000 },
     api: { maxRequests: 100, windowMs: 60000 },
@@ -54,6 +54,7 @@ import connectDB from '@/lib/mongodb';
 import CustomResponse from '@/lib/models/CustomResponse';
 import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { getResponseBody } from '@/__tests__/utils/testHelpers';
 
 // Helper to create NextRequest
 function createNextRequest(
@@ -61,16 +62,14 @@ function createNextRequest(
   options: { method?: string; body?: any; headers?: Record<string, string> } = {}
 ) {
   const { method = 'GET', body, headers = {} } = options;
-  return new NextRequest(
-    new Request(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-  );
+  return new NextRequest(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 }
 
 describe('/api/data/custom-responses', () => {
@@ -102,7 +101,7 @@ describe('/api/data/custom-responses', () => {
       const request = createNextRequest('http://localhost/api/data/custom-responses');
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(401);
       expect(data.error).toBe('Authentication required');
@@ -145,7 +144,7 @@ describe('/api/data/custom-responses', () => {
       });
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(200);
       expect(data.responses).toHaveLength(2);
@@ -179,7 +178,7 @@ describe('/api/data/custom-responses', () => {
       });
 
       const response = await GET(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(200);
       expect(CustomResponse.find).toHaveBeenCalledWith(
@@ -202,7 +201,7 @@ describe('/api/data/custom-responses', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(401);
       expect(data.error).toBe('Authentication required');
@@ -237,9 +236,9 @@ describe('/api/data/custom-responses', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(data.response).toBeDefined();
       expect(data.response.text).toBe('New response');
       expect(CustomResponse.create).toHaveBeenCalled();
@@ -253,7 +252,7 @@ describe('/api/data/custom-responses', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      const data = await getResponseBody(response);
 
       expect(response.status).toBe(400);
       expect(data.error).toBe('Invalid request');

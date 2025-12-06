@@ -10,7 +10,9 @@ jest.mock('@/lib/mongodb', () => ({
 jest.mock('@/lib/models/PracticeSession', () => ({
   __esModule: true,
   default: {
-    find: jest.fn(),
+    find: jest.fn(() => ({
+      lean: jest.fn(),
+    })),
   },
 }));
 jest.mock('@/lib/models/ConfidenceRating', () => ({
@@ -71,17 +73,18 @@ import ReviewSchedule from '@/lib/models/ReviewSchedule';
 import Points from '@/lib/models/Points';
 import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { getResponseBody } from '@/__tests__/utils/testHelpers';
 
 // Helper to create NextRequest
 function createNextRequest(url: string, options: { headers?: Record<string, string> } = {}) {
   const { headers = {} } = options;
-  return new NextRequest(new Request(url, {
+  return new NextRequest(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       ...headers,
     },
-  }));
+  });
 }
 
 describe('/api/data/stats', () => {
@@ -113,7 +116,7 @@ describe('/api/data/stats', () => {
     const request = createNextRequest('http://localhost/api/data/stats');
 
     const response = await GET(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Authentication required');
@@ -184,7 +187,7 @@ describe('/api/data/stats', () => {
     });
 
     const response = await GET(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(200);
     expect(data.totalSessions).toBe(1);
@@ -219,7 +222,7 @@ describe('/api/data/stats', () => {
     });
 
     const response = await GET(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(200);
     expect(data.totalSessions).toBe(0);
@@ -228,14 +231,16 @@ describe('/api/data/stats', () => {
   });
 
   it('should handle server errors gracefully', async () => {
-    (PracticeSession.find as jest.Mock).mockRejectedValue(new Error('Database error'));
+    (PracticeSession.find as jest.Mock).mockReturnValue({
+      lean: jest.fn().mockRejectedValue(new Error('Database error')),
+    });
 
     const request = createNextRequest('http://localhost/api/data/stats', {
       headers: { 'Authorization': 'Bearer valid-token' },
     });
 
     const response = await GET(request);
-    const data = await response.json();
+    const data = await getResponseBody(response);
 
     expect(response.status).toBe(500);
     expect(data.error).toBe('Database error');
