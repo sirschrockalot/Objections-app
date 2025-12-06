@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Search, Home, TrendingUp, DollarSign, Calculator } from 'lucide-react';
-import { getAuthHeaders } from '@/lib/apiClient';
+import { getAuthToken } from '@/lib/auth';
 
 interface PropertyAnalysis {
   id: string;
@@ -99,7 +99,7 @@ export default function MarketIntelligence() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+          'Authorization': `Bearer ${getAuthToken()}`,
         },
         body: JSON.stringify({
           address: address.trim(),
