@@ -57,11 +57,11 @@ describe('/api/auth/refresh', () => {
     remaining: 4,
   };
 
+  const mockRateLimitMiddleware = jest.fn().mockResolvedValue(mockRateLimit);
+
   beforeEach(() => {
     jest.clearAllMocks();
-    (createRateLimitMiddleware as jest.Mock).mockReturnValue(
-      jest.fn().mockResolvedValue(mockRateLimit)
-    );
+    (createRateLimitMiddleware as jest.Mock).mockReturnValue(mockRateLimitMiddleware);
     (signToken as jest.Mock).mockReturnValue('new-access-token');
     (signRefreshToken as jest.Mock).mockReturnValue('new-refresh-token');
   });
@@ -158,15 +158,17 @@ describe('/api/auth/refresh', () => {
   });
 
   it('should return 429 if rate limit exceeded', async () => {
-    (createRateLimitMiddleware as jest.Mock).mockReturnValue(
-      jest.fn().mockResolvedValue({
-        allowed: false,
-        response: NextResponse.json(
-          { error: 'Too many requests' },
-          { status: 429 }
-        ),
-      })
-    );
+    // Mock rate limit middleware to return rate limited response
+    const rateLimitedMiddleware = jest.fn().mockResolvedValue({
+      allowed: false,
+      remaining: 0,
+      response: NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429 }
+      ),
+    });
+    
+    (createRateLimitMiddleware as jest.Mock).mockReturnValue(rateLimitedMiddleware);
 
     const request = createNextRequest('http://localhost/api/auth/refresh', {
       body: { refreshToken: 'valid-refresh-token' },

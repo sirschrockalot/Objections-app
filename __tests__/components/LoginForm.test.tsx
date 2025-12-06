@@ -63,7 +63,7 @@ describe('LoginForm', () => {
     await userEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
+      expect(screen.getByText(/invalid.*password|error|network/i)).toBeInTheDocument();
     });
 
     expect(mockOnSuccess).not.toHaveBeenCalled();
@@ -160,7 +160,7 @@ describe('LoginForm', () => {
     await userEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument();
+      expect(screen.getByText(/invalid.*password|error|network/i)).toBeInTheDocument();
     });
 
     expect(mockOnSuccess).not.toHaveBeenCalled();

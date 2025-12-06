@@ -27,9 +27,9 @@ describe('AuthGuard', () => {
     window.removeEventListener = jest.fn();
   });
 
-  it('should show loading state while checking authentication', () => {
+  it('should show loading state while checking authentication', async () => {
     (isAuthenticated as jest.Mock).mockReturnValue(false);
-    (fetchCurrentUser as jest.Mock).mockResolvedValue(null);
+    (fetchCurrentUser as jest.Mock).mockImplementation(() => new Promise(() => {})); // Never resolves to keep loading
 
     render(
       <AuthGuard>
@@ -37,6 +37,7 @@ describe('AuthGuard', () => {
       </AuthGuard>
     );
 
+    // Check for loading text - component shows "Loading..." 
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
