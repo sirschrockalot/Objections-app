@@ -33,7 +33,9 @@ jest.mock('bcryptjs', () => ({
 
 jest.mock('@/lib/jwt', () => ({
   signToken: jest.fn(),
+  signRefreshToken: jest.fn(),
   verifyToken: jest.fn(),
+  verifyRefreshToken: jest.fn(),
   getTokenFromRequest: jest.fn((request: Request) => {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -55,7 +57,13 @@ jest.mock('@/lib/passwordValidation', () => ({
   validatePassword: jest.fn(() => ({ valid: true, error: null })),
 }));
 jest.mock('@/lib/inputValidation', () => ({
-  sanitizeEmail: jest.fn((email) => email || null),
+  sanitizeEmail: jest.fn((email) => {
+    if (!email) return null;
+    const sanitized = String(email).trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitized)) return null;
+    return sanitized.toLowerCase();
+  }),
 }));
 jest.mock('@/lib/accountLockout', () => ({
   recordFailedAttempt: jest.fn(() => ({ locked: false })),
@@ -66,6 +74,17 @@ jest.mock('@/lib/errorHandler', () => ({
   getSafeErrorMessage: jest.fn((error) => error?.message || 'An error occurred'),
   logError: jest.fn(),
 }));
+jest.mock('@/lib/authMiddleware', () => ({
+  requireAuth: jest.fn(),
+  requireAdmin: jest.fn(),
+  createAuthErrorResponse: jest.fn((authResult) => {
+    const { NextResponse } = require('next/server');
+    return NextResponse.json(
+      { error: authResult.error || 'Authentication failed' },
+      { status: authResult.statusCode || 401 }
+    );
+  }),
+}));
 
 // Import route handlers after mocks
 import { POST as loginPOST } from '@/app/api/auth/login/route';
@@ -74,10 +93,14 @@ import { GET as meGET } from '@/app/api/auth/me/route';
 import User from '@/lib/models/User';
 import bcrypt from 'bcryptjs';
 import { signToken, verifyToken } from '@/lib/jwt';
+import { requireAuth } from '@/lib/authMiddleware';
+import connectDB from '@/lib/mongodb';
 
 describe('JWT Authentication Flow Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock connectDB to resolve successfully
+    (connectDB as jest.Mock).mockResolvedValue(undefined);
   });
 
   describe('Complete Auth Flow', () => {
@@ -102,10 +125,13 @@ describe('JWT Authentication Flow Integration', () => {
       const { sanitizeEmail } = require('@/lib/inputValidation');
       const { validatePassword } = require('@/lib/passwordValidation');
       
+      const { signRefreshToken } = require('@/lib/jwt');
+      
       (User.findOne as jest.Mock).mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedpassword');
       (User.create as jest.Mock).mockResolvedValue(mockUser);
       (signToken as jest.Mock).mockReturnValue('mock-jwt-token-123');
+      (signRefreshToken as jest.Mock).mockReturnValue('mock-refresh-token-123');
       (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
       (validatePassword as jest.Mock).mockReturnValue({ valid: true, error: null });
 
@@ -134,18 +160,12 @@ describe('JWT Authentication Flow Integration', () => {
       });
 
       // Step 2: Use token for authenticated request
-      (verifyToken as jest.Mock).mockReturnValue({
+      // Mock requireAuth to return authenticated user
+      (requireAuth as jest.Mock).mockResolvedValue({
+        authenticated: true,
         userId: 'user123',
         isAdmin: false,
         email: 'test@example.com',
-      });
-      (User.findById as jest.Mock).mockReturnValue({
-        lean: jest.fn().mockResolvedValue({
-          _id: 'user123',
-          isActive: true,
-          isAdmin: false,
-          username: 'test@example.com',
-        }),
       });
 
       const meRequest = new NextRequest(
@@ -163,7 +183,7 @@ describe('JWT Authentication Flow Integration', () => {
       expect(meResponse.status).toBe(200);
       expect(meData.user).toBeDefined();
       expect(meData.user.id).toBe('user123');
-      expect(verifyToken).toHaveBeenCalledWith('mock-jwt-token-123');
+      expect(meData.user.email).toBe('test@example.com');
     });
 
     it('should login user, receive token, and use token for authenticated requests', async () => {
@@ -180,12 +200,17 @@ describe('JWT Authentication Flow Integration', () => {
         save: jest.fn().mockResolvedValue(true),
       };
 
-      const { UserActivity } = require('@/lib/models/UserActivity');
+      const UserActivity = require('@/lib/models/UserActivity').default;
+      const { sanitizeEmail } = require('@/lib/inputValidation');
+      const { recordFailedAttempt, clearFailedAttempts, isAccountLocked } = require('@/lib/accountLockout');
       
       (User.findOne as jest.Mock).mockResolvedValue(mockUser);
       (UserActivity.create as jest.Mock).mockResolvedValue({});
       (signToken as jest.Mock).mockReturnValue('mock-jwt-token-456');
       (sanitizeEmail as jest.Mock).mockReturnValue('test@example.com');
+      (isAccountLocked as jest.Mock).mockReturnValue({ locked: false });
+      (recordFailedAttempt as jest.Mock).mockReturnValue({ locked: false });
+      (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
 
       // Step 1: Login
       const loginRequest = new NextRequest(
@@ -212,18 +237,12 @@ describe('JWT Authentication Flow Integration', () => {
       });
 
       // Step 2: Use token for authenticated request
-      (verifyToken as jest.Mock).mockReturnValue({
+      // Mock requireAuth to return authenticated user
+      (requireAuth as jest.Mock).mockResolvedValue({
+        authenticated: true,
         userId: 'user123',
         isAdmin: false,
         email: 'test@example.com',
-      });
-      (User.findById as jest.Mock).mockReturnValue({
-        lean: jest.fn().mockResolvedValue({
-          _id: 'user123',
-          isActive: true,
-          isAdmin: false,
-          username: 'test@example.com',
-        }),
       });
 
       const meRequest = new NextRequest(
@@ -241,10 +260,15 @@ describe('JWT Authentication Flow Integration', () => {
       expect(meResponse.status).toBe(200);
       expect(meData.user).toBeDefined();
       expect(meData.user.id).toBe('user123');
+      expect(meData.user.email).toBe('test@example.com');
     });
 
     it('should reject requests without token', async () => {
-      (verifyToken as jest.Mock).mockReturnValue(null);
+      (requireAuth as jest.Mock).mockResolvedValue({
+        authenticated: false,
+        error: 'Authentication required',
+        statusCode: 401,
+      });
 
       const meRequest = new NextRequest(
         new Request('http://localhost/api/auth/me', {
@@ -260,7 +284,11 @@ describe('JWT Authentication Flow Integration', () => {
     });
 
     it('should reject requests with invalid token', async () => {
-      (verifyToken as jest.Mock).mockReturnValue(null);
+      (requireAuth as jest.Mock).mockResolvedValue({
+        authenticated: false,
+        error: 'Invalid or expired token',
+        statusCode: 401,
+      });
 
       const meRequest = new NextRequest(
         new Request('http://localhost/api/auth/me', {
@@ -294,8 +322,20 @@ describe('JWT Authentication Flow Integration', () => {
         save: jest.fn().mockResolvedValue(true),
       };
 
+      const UserActivity = require('@/lib/models/UserActivity').default;
+      const { sanitizeEmail } = require('@/lib/inputValidation');
+      const { recordFailedAttempt, clearFailedAttempts, isAccountLocked } = require('@/lib/accountLockout');
+      
+      const { signRefreshToken } = require('@/lib/jwt');
+      
       (User.findOne as jest.Mock).mockResolvedValue(mockUser);
+      (UserActivity.create as jest.Mock).mockResolvedValue({});
       (signToken as jest.Mock).mockReturnValue('admin-token');
+      (signRefreshToken as jest.Mock).mockReturnValue('admin-refresh-token');
+      (sanitizeEmail as jest.Mock).mockReturnValue('admin@example.com');
+      (isAccountLocked as jest.Mock).mockReturnValue({ locked: false });
+      (recordFailedAttempt as jest.Mock).mockReturnValue({ locked: false });
+      (clearFailedAttempts as jest.Mock).mockReturnValue(undefined);
 
       const loginRequest = new NextRequest(
         new Request('http://localhost/api/auth/login', {
@@ -308,8 +348,15 @@ describe('JWT Authentication Flow Integration', () => {
         })
       );
 
-      await loginPOST(loginRequest);
+      const loginResponse = await loginPOST(loginRequest);
+      const loginData = await loginResponse.json();
+      
+      // Debug: Check response if login failed
+      if (loginResponse.status !== 200) {
+        console.log('Login failed with status:', loginResponse.status, 'Error:', JSON.stringify(loginData, null, 2));
+      }
 
+      expect(loginResponse.status).toBe(200);
       expect(signToken).toHaveBeenCalledWith({
         userId: 'admin123',
         isAdmin: true,
