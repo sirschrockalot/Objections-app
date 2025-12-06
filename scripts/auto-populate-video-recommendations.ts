@@ -314,10 +314,12 @@ export const videoRecommendations: VideoRecommendation[] = [
       
       for (const difficulty of DIFFICULTIES) {
         if (byCategory[category][difficulty]) {
-          for (const video of byCategory[category][difficulty].slice(0, 1)) {
-            // Limit to 1 video per category-difficulty combination per creator
-            const creatorVideos = byCategory[category][difficulty].filter(v => v.creator === video.creator);
+          // Get one video per creator for this category-difficulty combination
+          const creators = ['Andy Elliott', 'Eric Cline', 'Tony Mont'] as const;
+          for (const creator of creators) {
+            const creatorVideos = byCategory[category][difficulty].filter(v => v.creator === creator);
             if (creatorVideos.length > 0) {
+              // Take the first video from this creator
               const selectedVideo = creatorVideos[0];
               content += `  {
     id: '${selectedVideo.id}',

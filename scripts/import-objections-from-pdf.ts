@@ -9,8 +9,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Use require for pdf-parse as it's a CommonJS module
+// pdf-parse exports a default function, not a named export
 // @ts-ignore - pdf-parse is a CommonJS module
-const { PDFParse } = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 
 interface Response {
   id: string;
@@ -215,8 +216,8 @@ async function main() {
     
     console.log('Reading PDF file...');
     const dataBuffer = fs.readFileSync(pdfPath);
-    const pdfParser = new PDFParse({ data: dataBuffer });
-    const pdfData = await pdfParser.getText();
+    // pdf-parse is a function that takes a buffer and returns a promise
+    const pdfData = await pdfParse(dataBuffer);
     
     console.log(`PDF extracted ${pdfData.text.length} characters`);
     
