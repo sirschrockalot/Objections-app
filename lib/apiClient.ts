@@ -51,7 +51,7 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-function getAuthHeaders(): HeadersInit {
+export function getAuthHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };

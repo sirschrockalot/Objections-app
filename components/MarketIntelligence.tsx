@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Search, Home, TrendingUp, DollarSign, Calculator } from 'lucide-react';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthHeaders } from '@/lib/apiClient';
 
 interface PropertyAnalysis {
   id: string;
