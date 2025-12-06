@@ -306,4 +306,3 @@ export const initialObjections: Objection[] = ${JSON.stringify(merged, null, 2)}
 }
 
 main();
-
