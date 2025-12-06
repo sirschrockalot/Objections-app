@@ -1,14 +1,17 @@
 import mongoose from 'mongoose';
 import { validateEnvVars } from './envValidation';
 
-// Validate environment variables on first import
-try {
-  validateEnvVars();
-} catch (error) {
-  console.error('Environment variable validation failed:', error);
-  // In production, we might want to exit, but in development we'll just warn
-  if (process.env.NODE_ENV === 'production') {
-    throw error;
+// Validate environment variables on first import (skip during build)
+// Only validate at runtime, not during Next.js build process
+if (typeof window === 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build') {
+  try {
+    validateEnvVars();
+  } catch (error) {
+    console.error('Environment variable validation failed:', error);
+    // In production runtime, we want to exit, but during build we'll just warn
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') {
+      throw error;
+    }
   }
 }
 
