@@ -24,18 +24,20 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
     console.warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
   }
   
+  // @ts-ignore - jsonwebtoken types have strict typing for expiresIn
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
-  } as SignOptions);
+  });
 }
 
 /**
  * Sign a refresh token (longer expiration)
  */
 export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
+  // @ts-ignore - jsonwebtoken types have strict typing for expiresIn
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_REFRESH_EXPIRES_IN,
-  } as SignOptions);
+  });
 }
 
 /**
