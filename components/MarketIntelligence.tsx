@@ -99,7 +99,7 @@ export default function MarketIntelligence() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           address: address.trim(),
