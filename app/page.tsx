@@ -35,7 +35,7 @@ import { checkAchievements } from '@/lib/achievements';
 import VoicePracticeMode from '@/components/VoicePracticeMode';
 import { saveVoiceSession } from '@/lib/voiceSessionStorage';
 import { VoiceSession } from '@/types';
-import { Search, Filter, X, Keyboard, Mic } from 'lucide-react';
+import { Search, Filter, X, Keyboard, Mic, Home as HomeIcon } from 'lucide-react';
 import OnboardingTour from '@/components/OnboardingTour';
 import { getMainAppOnboardingSteps } from '@/lib/onboarding';
 import WelcomeScreen from '@/components/WelcomeScreen';
@@ -46,6 +46,9 @@ import AuthGuard from '@/components/AuthGuard';
 type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
 export default function Home() {
+  // Feature flag for Voice Practice
+  const isVoicePracticeEnabled = process.env.NEXT_PUBLIC_ENABLE_VOICE_PRACTICE === 'true';
+  
   const [allObjections, setAllObjections] = useState<Objection[]>([]);
   const [filteredObjections, setFilteredObjections] = useState<Objection[]>([]);
   const [currentObjection, setCurrentObjection] = useState<Objection | null>(null);
@@ -610,20 +613,22 @@ export default function Home() {
                         <span className="font-semibold">Learning Path</span>
                         <span className="text-xs opacity-90">Guided progression</span>
                       </Button>
-                      <Button
-                        variant={practiceMode === 'voice' ? 'default' : 'outline'}
-                        size="lg"
-                        className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white border-0"
-                        onClick={() => {
-                          setPracticeMode('voice');
-                          setChallengeConfig(null);
-                          setHasStarted(true); // Start the voice practice mode
-                        }}
-                      >
-                        <Mic className="w-6 h-6" />
-                        <span className="font-semibold">Voice Practice</span>
-                        <span className="text-xs opacity-90">AI conversation</span>
-                      </Button>
+                      {isVoicePracticeEnabled && (
+                        <Button
+                          variant={practiceMode === 'voice' ? 'default' : 'outline'}
+                          size="lg"
+                          className="h-auto py-4 flex flex-col items-center gap-2 min-h-[100px] bg-gradient-to-br from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white border-0"
+                          onClick={() => {
+                            setPracticeMode('voice');
+                            setChallengeConfig(null);
+                            setHasStarted(true); // Start the voice practice mode
+                          }}
+                        >
+                          <Mic className="w-6 h-6" />
+                          <span className="font-semibold">Voice Practice</span>
+                          <span className="text-xs opacity-90">AI conversation</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -786,7 +791,7 @@ export default function Home() {
                   setIsLoading(false);
                 }}
               />
-            ) : practiceMode === 'voice' ? (
+            ) : practiceMode === 'voice' && isVoicePracticeEnabled ? (
               <div className="max-w-4xl mx-auto">
                 <VoicePracticeMode
                   onSessionEnd={(session: VoiceSession) => {
@@ -1010,6 +1015,11 @@ export default function Home() {
                 onChallengeCancel={() => {
                   setChallengeConfig(null);
                   setPracticeMode('random');
+                }}
+                onBackToMenu={() => {
+                  handleEndSession();
+                  setHasStarted(false);
+                  setCurrentObjection(null);
                 }}
                 onAddResponse={handleAddResponse}
                 onRatingChange={handleRatingChange}

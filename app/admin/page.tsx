@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { getAllUsers, getUserActivities, getUserStats, getCurrentUser, isAuthenticated, clearCurrentUser, createUser, updateUser, deleteUser } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User, Activity, Calendar, TrendingUp, LogOut, Loader2, UserPlus, Shield, BarChart3, Clock, Users, Zap } from 'lucide-react';
+import { User, Activity, Calendar, TrendingUp, LogOut, Loader2, UserPlus, Shield, BarChart3, Clock, Users, Zap, Home as HomeIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '@/components/AuthGuard';
 import UserManagementForm from '@/components/UserManagementForm';
@@ -201,6 +201,14 @@ export default function AdminPage() {
                   )}
                 </span>
               )}
+              <Button 
+                variant="outline" 
+                onClick={() => router.push('/')}
+                title="Back to main app"
+              >
+                <HomeIcon className="w-4 h-4 mr-2" />
+                Back to App
+              </Button>
               {!showUserForm && viewMode === 'users' && (
                 <Button onClick={handleCreateUser}>
                   <UserPlus className="w-4 h-4 mr-2" />

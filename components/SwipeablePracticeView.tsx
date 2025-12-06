@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import ObjectionCard, { ObjectionCardRef } from './ObjectionCard';
 import ChallengeMode from './ChallengeMode';
 import { useSwipe } from '@/hooks/useSwipe';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Home } from 'lucide-react';
 import { useRef } from 'react';
 
 interface SwipeablePracticeViewProps {
@@ -20,6 +20,7 @@ interface SwipeablePracticeViewProps {
   onUpvote: () => void;
   onNextObjection: () => void;
   onEndSession: () => void;
+  onBackToMenu?: () => void;
   sessionCount: number;
   onObjectionCardRef?: (ref: ObjectionCardRef | null) => void;
 }
@@ -35,6 +36,7 @@ export default function SwipeablePracticeView({
   onUpvote,
   onNextObjection,
   onEndSession,
+  onBackToMenu,
   sessionCount,
   onObjectionCardRef,
 }: SwipeablePracticeViewProps) {
@@ -84,6 +86,18 @@ export default function SwipeablePracticeView({
       />
       
       <div className="text-center space-y-4">
+        {onBackToMenu && (
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              onClick={onBackToMenu}
+              className="flex items-center gap-2"
+            >
+              <Home className="w-4 h-4" />
+              Back to Main Menu
+            </Button>
+          </div>
+        )}
         <div className="flex gap-4 justify-center flex-wrap">
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Button
