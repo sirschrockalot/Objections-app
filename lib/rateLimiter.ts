@@ -3,6 +3,9 @@
  * Uses in-memory storage for development, can be upgraded to Redis for production
  */
 
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+
 interface RateLimitRecord {
   count: number;
   resetTime: number;
