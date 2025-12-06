@@ -1104,7 +1104,7 @@ export default function Home() {
             ) : null}
           </AnimatePresence>
         </div>
-      </div>
+        </div>
 
       {/* Celebration Modal */}
       {celebration && (
