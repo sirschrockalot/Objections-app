@@ -25,7 +25,7 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
   }
   
   const options: SignOptions = {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_EXPIRES_IN as string | number,
   };
   return jwt.sign(payload, JWT_SECRET, options);
 }
@@ -35,7 +35,7 @@ export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
  */
 export function signRefreshToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
   const options: SignOptions = {
-    expiresIn: JWT_REFRESH_EXPIRES_IN,
+    expiresIn: JWT_REFRESH_EXPIRES_IN as string | number,
   };
   return jwt.sign(payload, JWT_SECRET, options);
 }
