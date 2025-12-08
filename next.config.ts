@@ -43,7 +43,8 @@ const nextConfig: NextConfig = {
         'node-cache': 'commonjs node-cache',
       });
       
-      // Prevent server-only lib files from being bundled
+      // Prevent server-only lib files from being bundled in client
+      // Using 'false' tells webpack to ignore these modules
       config.resolve.alias = {
         ...config.resolve.alias,
         '@/lib/mongodb': false,
@@ -52,6 +53,8 @@ const nextConfig: NextConfig = {
         '@/lib/cache/queryCache': false,
         '@/lib/rateLimiter': false,
         '@/lib/costTracking': false,
+        '@/lib/api/routeHandler': false,
+        '@/lib/authMiddleware': false,
       };
     }
     return config;

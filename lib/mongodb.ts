@@ -1,8 +1,3 @@
-// This module is server-only and should never be imported in client components
-if (typeof window !== 'undefined') {
-  throw new Error('lib/mongodb.ts is a server-only module and cannot be imported in client components');
-}
-
 import mongoose from 'mongoose';
 import { validateEnvVars } from './envValidation';
 

@@ -5,9 +5,23 @@
 
 import { VoiceSession, ConversationMessage, AIFeedback, QualityMetrics, AIRecommendation, ResponseAnalysis } from '@/types';
 import { getObjections } from './storage';
-import { getCachedAIResponse, cacheAIResponse } from '@/lib/cache/aiCache';
-import { trackAPICost, calculateOpenAICost } from '@/lib/costTracking';
 import { deduplicateRequest } from '@/lib/utils/requestDeduplication';
+
+// Server-only imports - only import on server side
+let getCachedAIResponse: any = null;
+let cacheAIResponse: any = null;
+let trackAPICost: any = null;
+let calculateOpenAICost: any = null;
+
+if (typeof window === 'undefined') {
+  // Server-side only - dynamically import to avoid bundling in client
+  const aiCache = require('@/lib/cache/aiCache');
+  const costTracking = require('@/lib/costTracking');
+  getCachedAIResponse = aiCache.getCachedAIResponse;
+  cacheAIResponse = aiCache.cacheAIResponse;
+  trackAPICost = costTracking.trackAPICost;
+  calculateOpenAICost = costTracking.calculateOpenAICost;
+}
 
 const AI_FEEDBACK_CACHE_KEY = 'response-ready-ai-feedback-cache';
 
@@ -93,11 +107,17 @@ export async function analyzeSessionWithAI(session: VoiceSession): Promise<AIFee
   const cacheKey = `analyzeSession:${session.id}`;
   return deduplicateRequest(cacheKey, async () => {
     try {
-      const serverCached = await getCachedAIResponse<AIFeedback>('feedback', cacheInput);
-      if (serverCached) {
-        // Also cache client-side for faster access
-        cacheFeedback(session.id, serverCached);
-        return serverCached;
+      // Check server-side cache only on server
+      let serverCached: AIFeedback | null = null;
+      if (typeof window === 'undefined' && getCachedAIResponse) {
+        serverCached = await getCachedAIResponse('feedback', cacheInput) as AIFeedback | null;
+        if (serverCached) {
+          // Also cache client-side for faster access (if in browser)
+          if (typeof window !== 'undefined') {
+            cacheFeedback(session.id, serverCached);
+          }
+          return serverCached;
+        }
       }
 
       // Prepare conversation context (optimized - reduced token usage)
@@ -161,9 +181,9 @@ Return JSON:
         throw new Error('No response from AI');
       }
 
-      // Track API cost
+      // Track API cost (server-side only)
       const usage = data.usage;
-      if (usage) {
+      if (usage && typeof window === 'undefined' && calculateOpenAICost && trackAPICost) {
         const cost = calculateOpenAICost('gpt-4o-mini', usage.prompt_tokens || 0, usage.completion_tokens || 0);
         trackAPICost('openai', cost, undefined, {
           model: 'gpt-4o-mini',
@@ -196,9 +216,13 @@ Return JSON:
         model: 'gpt-4o-mini',
       };
 
-      // Cache both client-side and server-side
-      cacheFeedback(session.id, feedback);
-      await cacheAIResponse('feedback', cacheInput, feedback, 86400); // 24 hours
+      // Cache client-side (always) and server-side (if on server)
+      if (typeof window !== 'undefined') {
+        cacheFeedback(session.id, feedback);
+      }
+      if (typeof window === 'undefined' && cacheAIResponse) {
+        await cacheAIResponse('feedback', cacheInput, feedback, 86400); // 24 hours
+      }
 
       return feedback;
     } catch (error) {
