@@ -3,6 +3,8 @@
  * Prevents information disclosure in production environments
  */
 
+import { error as logErrorUtil } from './logger';
+
 /**
  * Returns a safe error message for client responses
  * In production, returns generic messages to prevent information disclosure
@@ -23,17 +25,10 @@ export function getSafeErrorMessage(error: any, defaultMessage: string = 'An err
 /**
  * Logs detailed error information server-side only
  * Never exposes sensitive information to clients
+ * Uses centralized logger with log levels to reduce Heroku costs
  */
 export function logError(context: string, error: any, metadata?: Record<string, any>): void {
-  const errorDetails = {
-    context,
-    message: error?.message,
-    stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-    code: error?.code,
-    ...metadata,
-  };
-  
-  console.error(`[${context}] Error:`, errorDetails);
+  logErrorUtil(`${context}`, error, metadata);
 }
 
 /**

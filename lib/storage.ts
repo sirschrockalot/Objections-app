@@ -2,6 +2,7 @@ import { Objection, Response, ConfidenceRating, PracticeSession, ObjectionNote, 
 import { initialObjections } from '@/data/objections';
 import { apiGet, apiPost, apiPut, apiDelete } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
+import { error as logError } from './logger';
 
 const STORAGE_KEY = 'objections-app-data';
 const CONFIDENCE_RATINGS_KEY = 'objections-app-confidence-ratings';
@@ -41,7 +42,7 @@ async function loadCustomResponses(objectionId?: string): Promise<Response[]> {
       const data = await apiGet('/api/data/custom-responses', objectionId ? { objectionId } : {});
       return data.responses || [];
     } catch (error) {
-      console.error('Error loading custom responses from API:', error);
+      logError('Failed to load custom responses from API', error);
       // Fall back to localStorage
     }
   }
@@ -56,7 +57,7 @@ async function loadCustomResponses(objectionId?: string): Promise<Response[]> {
       return objection?.customResponses || [];
     }
   } catch (error) {
-    console.error('Error loading custom responses:', error);
+    logError('Failed to load custom responses from localStorage', error);
   }
   return [];
 }

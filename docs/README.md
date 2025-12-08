@@ -44,6 +44,7 @@ This directory contains all project documentation organized by category.
 ### Deployment
 - **[HEROKU_DEPLOYMENT.md](./deployment/HEROKU_DEPLOYMENT.md)** - Heroku deployment guide
 - **[MONGODB_SETUP.md](./deployment/MONGODB_SETUP.md)** - MongoDB setup and configuration
+- **[LOGGING_CONFIGURATION.md](./deployment/LOGGING_CONFIGURATION.md)** - Logging configuration to reduce Heroku costs
 
 ### Recommendations
 - **[FEATURE_RECOMMENDATIONS.md](./recommendations/FEATURE_RECOMMENDATIONS.md)** - Recommended features to implement

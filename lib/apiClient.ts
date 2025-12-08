@@ -2,6 +2,8 @@
  * API client helper for making authenticated requests
  */
 
+import { error as logError, warn as logWarn } from './logger';
+
 function getApiUrl(): string {
   if (typeof window === 'undefined') return '';
   return window.location.origin;
@@ -44,7 +46,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
     return data.token;
   } catch (error) {
-    console.error('Error refreshing token:', error);
+    logError('Token refresh failed', error);
     localStorage.removeItem('auth-token');
     localStorage.removeItem('refresh-token');
     return null;
@@ -112,7 +114,7 @@ export async function apiGet(endpoint: string, params?: Record<string, string>):
 
     return await response.json();
   } catch (error) {
-    console.error(`API GET error (${endpoint}):`, error);
+    logError(`API GET failed: ${endpoint}`, error);
     throw error;
   }
 }
@@ -134,7 +136,7 @@ export async function apiPost(endpoint: string, data: any): Promise<any> {
 
     return await response.json();
   } catch (error) {
-    console.error(`API POST error (${endpoint}):`, error);
+    logError(`API POST failed: ${endpoint}`, error);
     throw error;
   }
 }
@@ -156,7 +158,7 @@ export async function apiPut(endpoint: string, data: any): Promise<any> {
 
     return await response.json();
   } catch (error) {
-    console.error(`API PUT error (${endpoint}):`, error);
+    logError(`API PUT failed: ${endpoint}`, error);
     throw error;
   }
 }
@@ -184,7 +186,7 @@ export async function apiDelete(endpoint: string, params?: Record<string, string
 
     return await response.json();
   } catch (error) {
-    console.error(`API DELETE error (${endpoint}):`, error);
+    logError(`API DELETE failed: ${endpoint}`, error);
     throw error;
   }
 }
