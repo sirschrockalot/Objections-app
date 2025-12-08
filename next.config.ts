@@ -42,6 +42,17 @@ const nextConfig: NextConfig = {
         'mongodb': 'commonjs mongodb',
         'node-cache': 'commonjs node-cache',
       });
+      
+      // Prevent server-only lib files from being bundled
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@/lib/mongodb': false,
+        '@/lib/models': false,
+        '@/lib/cache/aiCache': false,
+        '@/lib/cache/queryCache': false,
+        '@/lib/rateLimiter': false,
+        '@/lib/costTracking': false,
+      };
     }
     return config;
   },

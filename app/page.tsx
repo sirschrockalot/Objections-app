@@ -38,7 +38,7 @@ import { saveVoiceSession } from '@/lib/voiceSessionStorage';
 import { VoiceSession } from '@/types';
 import { Search, Filter, X, Keyboard, Mic, Home as HomeIcon } from 'lucide-react';
 import OnboardingTour from '@/components/OnboardingTour';
-import { getMainAppOnboardingSteps } from '@/lib/onboarding';
+import { getMainAppOnboardingSteps, isOnboardingCompleted } from '@/lib/onboarding';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import UserMenu from '@/components/UserMenu';
 import { getCurrentUserId, trackUserActivity } from '@/lib/auth';
@@ -101,7 +101,6 @@ export default function Home() {
           void trackUserActivity(userId, 'page_view', { page: 'home' });
         }
 
-        const { isOnboardingCompleted } = await import('@/lib/onboarding');
         if (isMounted && !isOnboardingCompleted()) {
           setTimeout(() => {
             if (isMounted) {
