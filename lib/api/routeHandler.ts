@@ -90,9 +90,9 @@ export function createApiHandler(options: RouteHandlerOptions) {
       }
 
       // 3. Database Connection
-      // Note: If auth is required, requireAuth already connects to DB
+      // Note: If auth is required, requireAuth/requireAdmin already connects to DB
       // But we still need to ensure connection for non-auth routes
-      if (!needsAuth) {
+      if (!needsAuth && !needsAdmin) {
         await connectDB();
       }
 
