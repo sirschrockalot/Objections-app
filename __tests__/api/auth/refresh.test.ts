@@ -29,6 +29,50 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/api/routeHandler', () => {
+  const { NextResponse } = require('next/server');
+  return {
+    createApiHandler: jest.fn((options) => {
+      // Return a handler that executes the handler function directly for testing
+      // This bypasses rate limiting and auth checks for unit testing
+      return async (request: any) => {
+        try {
+          // Ensure request.json() is available
+          if (!request.json) {
+            request.json = async () => {
+              try {
+                const text = await request.text();
+                return text ? JSON.parse(text) : {};
+              } catch {
+                return {};
+              }
+            };
+          }
+          
+          // Skip rate limiting and auth for testing - execute handler directly
+          const context = {
+            userId: '',
+            isAdmin: false,
+            email: undefined,
+            rateLimitRemaining: 99,
+            request,
+          };
+          const result = await options.handler(request, context);
+          // If handler returns NextResponse, return it; otherwise wrap in NextResponse
+          if (result && typeof result === 'object' && 'status' in result && 'json' in result) {
+            return result;
+          }
+          return NextResponse.json(result);
+        } catch (error: any) {
+          return NextResponse.json(
+            { error: error.message || 'An error occurred' },
+            { status: 500 }
+          );
+        }
+      };
+    }),
+  };
+});
 
 // Now import after mocks
 import { POST } from '@/app/api/auth/refresh/route';

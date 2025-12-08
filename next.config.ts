@@ -8,6 +8,43 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '1mb',
     },
   },
+  // Mark server-only packages as external (prevents bundling in client)
+  serverExternalPackages: [
+    'mongoose',
+    'mongodb',
+    'node-cache',
+  ],
+  // Prevent server-only modules from being bundled in client (webpack fallback)
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Exclude server-only modules from client bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
+        'async_hooks': false,
+      };
+      
+      // Ignore mongoose and related server-only packages in client bundle
+      config.externals = config.externals || [];
+      config.externals.push({
+        'mongoose': 'commonjs mongoose',
+        'mongodb': 'commonjs mongodb',
+        'node-cache': 'commonjs node-cache',
+      });
+    }
+    return config;
+  },
   // CORS configuration
   async rewrites() {
     return [];

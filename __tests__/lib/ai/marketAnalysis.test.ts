@@ -2,6 +2,68 @@
  * Tests for AI market analysis functions
  */
 
+// Mock dependencies - MUST be before imports
+jest.mock('@/lib/mongodb', () => ({
+  __esModule: true,
+  default: jest.fn().mockResolvedValue({}),
+}));
+jest.mock('mongoose', () => {
+  const MockSchema = class {
+    static Types = {
+      Mixed: {},
+      String: 'String',
+      Number: 'Number',
+      Date: 'Date',
+      Boolean: 'Boolean',
+    };
+    constructor(definition: any, options?: any) {}
+    index() { return this; }
+  };
+  return {
+    models: {},
+    model: jest.fn(() => ({
+      findOne: jest.fn().mockResolvedValue(null),
+      findOneAndUpdate: jest.fn().mockResolvedValue(null),
+    })),
+    Schema: MockSchema,
+    Types: MockSchema.Types,
+  };
+});
+jest.mock('node-cache', () => {
+  const mockCacheStore = new Map<string, { value: any; ttl: number }>();
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn((key: string) => {
+      const entry = mockCacheStore.get(key);
+      if (!entry) return undefined;
+      if (entry.ttl > 0 && Date.now() > entry.ttl) {
+        mockCacheStore.delete(key);
+        return undefined;
+      }
+      return entry.value;
+    }),
+    set: jest.fn((key: string, value: any, ttl?: number) => {
+      const expiresAt = ttl ? Date.now() + (ttl * 1000) : 0;
+      mockCacheStore.set(key, { value, ttl: expiresAt });
+      return true;
+    }),
+    del: jest.fn((key: string) => {
+      mockCacheStore.delete(key);
+      return 1;
+    }),
+  }));
+});
+jest.mock('@/lib/cache/aiCache', () => ({
+  getCachedAIResponse: jest.fn().mockResolvedValue(null), // Always return null to force API calls in tests
+  cacheAIResponse: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/lib/utils/requestDeduplication', () => ({
+  deduplicateRequest: jest.fn((key, fn) => fn()), // Execute function directly without deduplication
+}));
+jest.mock('@/lib/costTracking', () => ({
+  trackAPICost: jest.fn().mockResolvedValue(undefined),
+  calculateOpenAICost: jest.fn(() => 0.001),
+}));
+
 // Mock OpenAI API
 global.fetch = jest.fn();
 
@@ -12,6 +74,8 @@ describe('AI Market Analysis', () => {
     jest.clearAllMocks();
     // Reset environment variable
     delete process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    // Clear module cache to ensure fresh imports
+    jest.resetModules();
   });
 
   describe('analyzeComps', () => {

@@ -1,25 +1,22 @@
 /**
  * Refresh token endpoint
  * Allows clients to get a new access token using a refresh token
+ * Note: This route doesn't use requireAuth since it uses refresh token instead
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRefreshToken, signToken, signRefreshToken } from '@/lib/jwt';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 
-const authRateLimit = createRateLimitMiddleware(RATE_LIMITS.auth);
-
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await authRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.auth,
+  requireAuth: false, // Uses refresh token instead
+  errorContext: 'Refresh token',
+  handler: async (req) => {
+    const body = await req.json();
     const { refreshToken } = body;
 
     if (!refreshToken) {
@@ -62,21 +59,10 @@ export async function POST(request: NextRequest) {
       email: user.username,
     });
 
-    const response = NextResponse.json({
+    return {
       token: newAccessToken,
       refreshToken: newRefreshToken,
-    });
-
-    // Add rate limit headers
-    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
-
-    return response;
-  } catch (error: any) {
-    console.error('Refresh token error:', error);
-    return NextResponse.json(
-      { error: 'Failed to refresh token' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+});
 

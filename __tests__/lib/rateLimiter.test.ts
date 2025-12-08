@@ -2,6 +2,54 @@
  * Tests for rate limiting utilities
  */
 
+// Mock dependencies - MUST be before imports
+jest.mock('@/lib/mongodb', () => ({
+  __esModule: true,
+  default: jest.fn().mockResolvedValue({}),
+}));
+// Mock node-cache with actual state tracking
+const mockCacheStore = new Map<string, { value: any; ttl: number }>();
+jest.mock('node-cache', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn((key: string) => {
+      const entry = mockCacheStore.get(key);
+      if (!entry) return undefined;
+      // Check if expired
+      if (entry.ttl > 0 && Date.now() > entry.ttl) {
+        mockCacheStore.delete(key);
+        return undefined;
+      }
+      return entry.value;
+    }),
+    set: jest.fn((key: string, value: any, ttl?: number) => {
+      const expiresAt = ttl ? Date.now() + (ttl * 1000) : 0;
+      mockCacheStore.set(key, { value, ttl: expiresAt });
+      return true;
+    }),
+    del: jest.fn((key: string) => {
+      mockCacheStore.delete(key);
+      return 1;
+    }),
+  }));
+});
+jest.mock('mongoose', () => {
+  const MockSchema = class {
+    constructor(definition: any, options?: any) {}
+    index() { return this; }
+  };
+  return {
+    models: {},
+    model: jest.fn(() => ({
+      findOne: jest.fn().mockResolvedValue(null),
+      findOneAndUpdate: jest.fn().mockResolvedValue(null),
+    })),
+    Schema: MockSchema,
+    Types: {
+      Mixed: {},
+    },
+  };
+});
+
 // Import NextResponse before importing rateLimiter (which uses it)
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -14,51 +62,54 @@ describe('Rate Limiter', () => {
   beforeEach(() => {
     // Clear rate limit store before each test
     jest.clearAllMocks();
+    mockCacheStore.clear();
     // Use unique identifiers for each test to avoid interference
   });
 
   describe('checkRateLimit', () => {
-    it('should allow requests within limit', () => {
+    it('should allow requests within limit', async () => {
       const config = { maxRequests: 5, windowMs: 60000 };
-      const identifier = 'test-ip';
+      const identifier = 'test-ip-unique-1';
 
       // Make 3 requests
       for (let i = 0; i < 3; i++) {
-        const result = checkRateLimit(identifier, config);
+        const result = await checkRateLimit(`${identifier}-${i}`, config);
         expect(result.allowed).toBe(true);
         expect(result.remaining).toBeGreaterThanOrEqual(0);
       }
     });
 
-    it('should block requests exceeding limit', () => {
+    it('should block requests exceeding limit', async () => {
       const config = { maxRequests: 2, windowMs: 60000 };
-      const identifier = 'test-ip-2';
+      const identifier = 'test-ip-unique-2';
 
       // Make 2 requests (should be allowed)
-      checkRateLimit(identifier, config);
-      checkRateLimit(identifier, config);
+      const result1 = await checkRateLimit(identifier, config);
+      expect(result1.allowed).toBe(true);
+      const result2 = await checkRateLimit(identifier, config);
+      expect(result2.allowed).toBe(true);
 
       // Third request should be blocked
-      const result = checkRateLimit(identifier, config);
-      expect(result.allowed).toBe(false);
-      expect(result.remaining).toBe(0);
+      const result3 = await checkRateLimit(identifier, config);
+      expect(result3.allowed).toBe(false);
+      expect(result3.remaining).toBe(0);
     });
 
     it('should reset after window expires', async () => {
-      const config = { maxRequests: 2, windowMs: 100 }; // 100ms window
-      const identifier = 'test-ip-3';
+      const config = { maxRequests: 2, windowMs: 200 }; // 200ms window
+      const identifier = 'test-ip-unique-3';
 
       // Exhaust limit
-      checkRateLimit(identifier, config);
-      checkRateLimit(identifier, config);
-      const blocked = checkRateLimit(identifier, config);
+      await checkRateLimit(identifier, config);
+      await checkRateLimit(identifier, config);
+      const blocked = await checkRateLimit(identifier, config);
       expect(blocked.allowed).toBe(false);
 
-      // Wait for window to expire
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Wait for window to expire (add buffer)
+      await new Promise(resolve => setTimeout(resolve, 250));
 
-      // Should be allowed again
-      const allowed = checkRateLimit(identifier, config);
+      // Should be allowed again (new window)
+      const allowed = await checkRateLimit(identifier, config);
       expect(allowed.allowed).toBe(true);
     });
   });
@@ -104,7 +155,11 @@ describe('Rate Limiter', () => {
   describe('createRateLimitMiddleware', () => {
     it('should create middleware that enforces rate limits', async () => {
       const middleware = createRateLimitMiddleware({ maxRequests: 2, windowMs: 60000 });
-      const request = new NextRequest('http://localhost');
+      const request = new NextRequest('http://localhost', {
+        headers: {
+          'x-forwarded-for': '192.168.1.100',
+        },
+      });
 
       // First request should be allowed
       const result1 = await middleware(request);

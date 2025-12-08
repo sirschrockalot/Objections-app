@@ -1,29 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import ConfidenceRating from '@/lib/models/ConfidenceRating';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { formatConfidenceRating } from '@/lib/api/responseFormatters';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get confidence ratings',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const objectionId = searchParams.get('objectionId');
 
     const query: any = { userId };
@@ -32,38 +18,16 @@ export async function GET(request: NextRequest) {
     }
 
     const ratings = await ConfidenceRating.find(query).sort({ date: -1 }).lean();
+    return { ratings: ratings.map(formatConfidenceRating) };
+  },
+});
 
-    return NextResponse.json({
-      ratings: ratings.map((r) => ({
-        objectionId: r.objectionId,
-        rating: r.rating,
-        date: r.date.toISOString(),
-      })),
-    });
-  } catch (error: any) {
-    console.error('Get confidence ratings error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get ratings' }, { status: 500 });
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Save confidence rating',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { objectionId, rating } = body;
 
     if (!objectionId || !rating || rating < 1 || rating > 5) {
@@ -77,16 +41,7 @@ export async function POST(request: NextRequest) {
       date: new Date(),
     });
 
-    return NextResponse.json({
-      rating: {
-        objectionId: confidenceRating.objectionId,
-        rating: confidenceRating.rating,
-        date: confidenceRating.date.toISOString(),
-      },
-    });
-  } catch (error: any) {
-    console.error('Save confidence rating error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to save rating' }, { status: 500 });
-  }
-}
+    return { rating: formatConfidenceRating(confidenceRating) };
+  },
+});
 

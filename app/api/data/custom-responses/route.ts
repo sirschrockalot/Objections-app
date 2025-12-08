@@ -1,31 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import CustomResponse from '@/lib/models/CustomResponse';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
-import { getSafeErrorMessage, logError } from '@/lib/errorHandler';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { formatCustomResponse } from '@/lib/api/responseFormatters';
 import { sanitizeString, sanitizeObjectId } from '@/lib/inputValidation';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.api,
+  requireAuth: true,
+  errorContext: 'Get custom responses',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const objectionIdParam = searchParams.get('objectionId');
 
     const query: any = { userId };
@@ -37,46 +22,16 @@ export async function GET(request: NextRequest) {
     }
 
     const responses = await CustomResponse.find(query).sort({ createdAt: -1 }).lean();
+    return { responses: responses.map(formatCustomResponse) };
+  },
+});
 
-    return NextResponse.json({
-      responses: responses.map((r) => ({
-        id: r.responseId,
-        objectionId: r.objectionId, // Include objectionId so client can group responses
-        text: r.text,
-        isCustom: r.isCustom,
-        createdAt: r.createdAt.toISOString(),
-        createdBy: r.createdBy,
-        upvotes: r.upvotes,
-        upvotedBy: r.upvotedBy,
-      })),
-    });
-  } catch (error: any) {
-    logError('Get custom responses', error);
-    return NextResponse.json(
-      { error: getSafeErrorMessage(error, 'Failed to get responses') },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.api,
+  requireAuth: true,
+  errorContext: 'Save custom response',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { objectionId, response } = body;
 
     // Sanitize inputs
@@ -100,44 +55,16 @@ export async function POST(request: NextRequest) {
       upvotedBy: response.upvotedBy || [],
     });
 
-    return NextResponse.json({
-      response: {
-        id: customResponse.responseId,
-        text: customResponse.text,
-        isCustom: customResponse.isCustom,
-        createdAt: customResponse.createdAt.toISOString(),
-        createdBy: customResponse.createdBy,
-        upvotes: customResponse.upvotes,
-        upvotedBy: customResponse.upvotedBy,
-      },
-    });
-  } catch (error: any) {
-    logError('Save custom response', error);
-    return NextResponse.json(
-      { error: getSafeErrorMessage(error, 'Failed to save response') },
-      { status: 500 }
-    );
-  }
-}
+    return { response: formatCustomResponse(customResponse) };
+  },
+});
 
-export async function PUT(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const PUT = createApiHandler({
+  rateLimit: RATE_LIMITS.api,
+  requireAuth: true,
+  errorContext: 'Upvote response',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { objectionId, responseId } = body;
 
     if (!objectionId || !responseId) {
@@ -161,16 +88,13 @@ export async function PUT(request: NextRequest) {
 
     await response.save();
 
-    return NextResponse.json({
+    return {
       response: {
         id: response.responseId,
         upvotes: response.upvotes,
         upvotedBy: response.upvotedBy,
       },
-    });
-  } catch (error: any) {
-    console.error('Upvote response error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to upvote' }, { status: 500 });
-  }
-}
+    };
+  },
+});
 

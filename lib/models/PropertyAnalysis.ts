@@ -105,9 +105,11 @@ const PropertyAnalysisSchema = new Schema<IPropertyAnalysis, PropertyAnalysisMod
   }
 );
 
-// Index for faster lookups
+// Indexes for faster lookups
 PropertyAnalysisSchema.index({ userId: 1, createdAt: -1 });
 PropertyAnalysisSchema.index({ propertyAddress: 1 });
+// Compound index for cache lookup query (userId + propertyAddress + createdAt)
+PropertyAnalysisSchema.index({ userId: 1, propertyAddress: 1, createdAt: -1 });
 
 export default mongoose.models.PropertyAnalysis ||
   mongoose.model<IPropertyAnalysis>('PropertyAnalysis', PropertyAnalysisSchema);

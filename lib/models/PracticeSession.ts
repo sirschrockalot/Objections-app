@@ -53,7 +53,9 @@ const PracticeSessionSchema = new Schema<IPracticeSession>(
   }
 );
 
+// Indexes for efficient queries
 PracticeSessionSchema.index({ userId: 1, date: -1 });
+PracticeSessionSchema.index({ userId: 1, objectionId: 1 }); // For objection-specific queries
 
 const PracticeSession: PracticeSessionModel =
   mongoose.models.PracticeSession ||

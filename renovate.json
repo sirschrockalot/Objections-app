@@ -1,0 +1,72 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Group production dependencies (patch/minor)",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "production-dependencies",
+      "groupSlug": "prod-deps"
+    },
+    {
+      "description": "Group dev dependencies (patch/minor)",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "dev-dependencies",
+      "groupSlug": "dev-deps"
+    },
+    {
+      "description": "Auto-merge patch updates that pass CI",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Require manual review for major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Critical packages - require manual review for major updates",
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "next",
+        "mongoose",
+        "typescript"
+      ],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["breaking-change", "requires-review"]
+    },
+    {
+      "description": "Security updates - auto-merge if passing",
+      "matchUpdateTypes": ["security"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["security"]
+    }
+  ],
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "timezone": "America/New_York",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "commitMessagePrefix": "chore:",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+  "separateMinorPatch": false,
+  "separateMajorMinor": true,
+  "rangeStrategy": "update-lockfile"
+}
+

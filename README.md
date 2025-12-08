@@ -46,6 +46,25 @@ npm run build
 npm start
 ```
 
+## Dependency Management
+
+This project uses **automated dependency updates** via Dependabot:
+
+- ✅ **Automatic Updates:** Dependabot creates PRs for dependency updates weekly
+- ✅ **Auto-Merge:** Patch/minor updates that pass CI are automatically merged
+- ✅ **Security First:** Security updates are prioritized and auto-merged
+- ✅ **Manual Review:** Major updates require manual review
+
+**Manual Commands:**
+```bash
+npm run deps:check          # Check for outdated packages
+npm run deps:audit          # Check for security vulnerabilities
+npm run deps:fix            # Fix security vulnerabilities
+npm run deps:check-manual   # Detailed dependency report
+```
+
+For more information, see [docs/dependencies/DEPENDENCY_MANAGEMENT.md](./docs/dependencies/DEPENDENCY_MANAGEMENT.md).
+
 ## How to Use
 
 1. **Start a Practice Session**: Click the "Start Practice Session" button
@@ -109,6 +128,20 @@ Consider adding:
 - Export/import functionality for responses
 - Categories or tags for objections
 - Search functionality
+
+## Documentation
+
+Comprehensive documentation is available in the [`docs/`](./docs/) directory, organized by category:
+
+- **[Architecture & Design](./docs/architecture/)** - System design, cost optimization, and code improvements
+- **[Dependencies](./docs/dependencies/)** - Dependency management and automation
+- **[Security](./docs/security/)** - Security audits, authentication, and JWT implementation
+- **[Testing](./docs/testing/)** - Testing guidelines, status, and fixes
+- **[Features](./docs/features/)** - Feature implementation guides (voice agent, video recommendations, etc.)
+- **[Deployment](./docs/deployment/)** - Deployment guides (Heroku, MongoDB setup)
+- **[Recommendations](./docs/recommendations/)** - Feature recommendations and quality reports
+
+See [docs/README.md](./docs/README.md) for a complete index of all documentation.
 
 ## License
 

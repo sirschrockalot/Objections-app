@@ -1,29 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import ObjectionNote from '@/lib/models/ObjectionNote';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { formatNote } from '@/lib/api/responseFormatters';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get notes',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const objectionId = searchParams.get('objectionId');
 
     const query: any = { userId };
@@ -32,39 +18,16 @@ export async function GET(request: NextRequest) {
     }
 
     const notes = await ObjectionNote.find(query).lean();
+    return { notes: notes.map(formatNote) };
+  },
+});
 
-    return NextResponse.json({
-      notes: notes.map((n) => ({
-        objectionId: n.objectionId,
-        note: n.note,
-        createdAt: n.createdAt.toISOString(),
-        updatedAt: n.updatedAt.toISOString(),
-      })),
-    });
-  } catch (error: any) {
-    console.error('Get notes error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get notes' }, { status: 500 });
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Save note',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { objectionId, note } = body;
 
     if (!objectionId || note === undefined) {
@@ -89,38 +52,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      note: {
-        objectionId: noteDoc.objectionId,
-        note: noteDoc.note,
-        createdAt: noteDoc.createdAt.toISOString(),
-        updatedAt: noteDoc.updatedAt.toISOString(),
-      },
-    });
-  } catch (error: any) {
-    console.error('Save note error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to save note' }, { status: 500 });
-  }
-}
+    return { note: formatNote(noteDoc) };
+  },
+});
 
-export async function DELETE(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const DELETE = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Delete note',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const objectionId = searchParams.get('objectionId');
 
     if (!objectionId) {
@@ -128,11 +69,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     await ObjectionNote.deleteOne({ userId, objectionId });
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Delete note error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to delete note' }, { status: 500 });
-  }
-}
+    return { success: true };
+  },
+});
 

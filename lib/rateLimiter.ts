@@ -1,28 +1,67 @@
 /**
  * Server-side rate limiting
- * Uses in-memory storage for development, can be upgraded to Redis for production
+ * Uses in-memory cache (node-cache) for fast access with MongoDB as persistence fallback
  */
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import NodeCache from 'node-cache';
+import connectDB from '@/lib/mongodb';
+import mongoose, { Schema, Model } from 'mongoose';
 
 interface RateLimitRecord {
   count: number;
   resetTime: number;
 }
 
-// In-memory rate limit store
-const rateLimitStore = new Map<string, RateLimitRecord>();
+interface IRateLimit {
+  _id: string;
+  identifier: string;
+  count: number;
+  resetTime: Date;
+  createdAt: Date;
+}
 
-// Cleanup old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of rateLimitStore.entries()) {
-    if (now > record.resetTime) {
-      rateLimitStore.delete(key);
-    }
+const RateLimitSchema = new Schema<IRateLimit>(
+  {
+    identifier: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    count: {
+      type: Number,
+      required: true,
+    },
+    resetTime: {
+      type: Date,
+      required: true,
+      index: true,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    timestamps: false,
   }
-}, 5 * 60 * 1000);
+);
+
+// TTL index for auto-cleanup
+RateLimitSchema.index({ resetTime: 1 }, { expireAfterSeconds: 0 });
+
+const RateLimit: Model<IRateLimit> =
+  mongoose.models.RateLimit ||
+  mongoose.model<IRateLimit>('RateLimit', RateLimitSchema);
+
+// In-memory rate limit store (primary cache)
+const memoryCache = new NodeCache({
+  stdTTL: 900, // Default 15 minutes
+  checkperiod: 300, // Check for expired keys every 5 minutes
+  useClones: false,
+});
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -37,21 +76,117 @@ export interface RateLimitResult {
 
 /**
  * Check rate limit for an identifier (IP address or user ID)
+ * Uses in-memory cache first, then MongoDB as fallback
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   identifier: string,
   config: RateLimitConfig
-): RateLimitResult {
+): Promise<RateLimitResult> {
   const now = Date.now();
-  const record = rateLimitStore.get(identifier);
-
-  // No record or window expired - create new record
-  if (!record || now > record.resetTime) {
+  const cacheKey = `ratelimit:${identifier}`;
+  
+  // Try in-memory cache first
+  const memoryCached = memoryCache.get<RateLimitRecord>(cacheKey);
+  if (memoryCached !== undefined) {
+    // Check if expired
+    if (now > memoryCached.resetTime) {
+      memoryCache.del(cacheKey);
+      // Create new record
+      const newRecord: RateLimitRecord = {
+        count: 1,
+        resetTime: now + config.windowMs,
+      };
+      memoryCache.set(cacheKey, newRecord, Math.ceil(config.windowMs / 1000));
+      
+      // Also save to MongoDB (async)
+      saveRateLimitToDB(identifier, newRecord).catch(console.error);
+      
+      return {
+        allowed: true,
+        remaining: config.maxRequests - 1,
+        resetTime: newRecord.resetTime,
+      };
+    }
+    
+    // Check if limit exceeded
+    if (memoryCached.count >= config.maxRequests) {
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: memoryCached.resetTime,
+      };
+    }
+    
+    // Increment count
+    memoryCached.count++;
+    memoryCache.set(cacheKey, memoryCached, Math.ceil((memoryCached.resetTime - now) / 1000));
+    
+    // Also save to MongoDB (async)
+    saveRateLimitToDB(identifier, memoryCached).catch(console.error);
+    
+    return {
+      allowed: true,
+      remaining: config.maxRequests - memoryCached.count,
+      resetTime: memoryCached.resetTime,
+    };
+  }
+  
+  // Fallback to MongoDB
+  try {
+    await connectDB();
+    const dbRecord = await RateLimit.findOne({ identifier }).lean();
+    
+    if (!dbRecord || now > new Date(dbRecord.resetTime).getTime()) {
+      // Create new record
+      const newRecord: RateLimitRecord = {
+        count: 1,
+        resetTime: now + config.windowMs,
+      };
+      
+      // Store in both memory and DB
+      memoryCache.set(cacheKey, newRecord, Math.ceil(config.windowMs / 1000));
+      await saveRateLimitToDB(identifier, newRecord);
+      
+      return {
+        allowed: true,
+        remaining: config.maxRequests - 1,
+        resetTime: newRecord.resetTime,
+      };
+    }
+    
+    // Check if limit exceeded
+    if (dbRecord.count >= config.maxRequests) {
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: new Date(dbRecord.resetTime).getTime(),
+      };
+    }
+    
+    // Increment count
+    const updatedRecord: RateLimitRecord = {
+      count: dbRecord.count + 1,
+      resetTime: new Date(dbRecord.resetTime).getTime(),
+    };
+    
+    // Store in both memory and DB
+    const ttl = Math.max(0, Math.ceil((updatedRecord.resetTime - now) / 1000));
+    memoryCache.set(cacheKey, updatedRecord, ttl);
+    await saveRateLimitToDB(identifier, updatedRecord);
+    
+    return {
+      allowed: true,
+      remaining: config.maxRequests - updatedRecord.count,
+      resetTime: updatedRecord.resetTime,
+    };
+  } catch (error) {
+    console.error('Error checking rate limit in MongoDB:', error);
+    // Fallback to in-memory only
     const newRecord: RateLimitRecord = {
       count: 1,
       resetTime: now + config.windowMs,
     };
-    rateLimitStore.set(identifier, newRecord);
+    memoryCache.set(cacheKey, newRecord, Math.ceil(config.windowMs / 1000));
     
     return {
       allowed: true,
@@ -59,25 +194,27 @@ export function checkRateLimit(
       resetTime: newRecord.resetTime,
     };
   }
+}
 
-  // Check if limit exceeded
-  if (record.count >= config.maxRequests) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetTime: record.resetTime,
-    };
+/**
+ * Save rate limit to MongoDB (async helper)
+ */
+async function saveRateLimitToDB(identifier: string, record: RateLimitRecord): Promise<void> {
+  try {
+    await connectDB();
+    await RateLimit.findOneAndUpdate(
+      { identifier },
+      {
+        identifier,
+        count: record.count,
+        resetTime: new Date(record.resetTime),
+        createdAt: new Date(),
+      },
+      { upsert: true, new: true }
+    );
+  } catch (error) {
+    console.error('Error saving rate limit to MongoDB:', error);
   }
-
-  // Increment count
-  record.count++;
-  rateLimitStore.set(identifier, record);
-
-  return {
-    allowed: true,
-    remaining: config.maxRequests - record.count,
-    resetTime: record.resetTime,
-  };
 }
 
 /**
@@ -128,7 +265,7 @@ export function createRateLimitMiddleware(config: RateLimitConfig) {
     remaining: number;
   }> => {
     const identifier = getClientIdentifier(request, userId);
-    const result = checkRateLimit(identifier, config);
+    const result = await checkRateLimit(identifier, config);
 
     if (!result.allowed) {
       const response = NextResponse.json(

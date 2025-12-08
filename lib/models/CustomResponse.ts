@@ -59,7 +59,9 @@ const CustomResponseSchema = new Schema<ICustomResponse>(
   }
 );
 
+// Indexes for efficient queries
 CustomResponseSchema.index({ userId: 1, objectionId: 1 });
+CustomResponseSchema.index({ userId: 1, createdAt: -1 }); // For listing user's responses
 // Note: responseId already has an index from unique: true
 
 const CustomResponse: CustomResponseModel =

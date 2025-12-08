@@ -1,66 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import Points from '@/lib/models/Points';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { formatPoints } from '@/lib/api/responseFormatters';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get points',
+  handler: async (req, { userId }) => {
     const pointsEntries = await Points.find({ userId }).sort({ date: -1 }).lean();
-
     const total = pointsEntries.reduce((sum, entry) => sum + entry.points, 0);
 
-    return NextResponse.json({
+    return {
       total,
-      history: pointsEntries.map((p) => ({
-        id: p.pointsId,
-        points: p.points,
-        reason: p.reason,
-        date: p.date.toISOString(),
-        metadata: p.metadata,
-      })),
-    });
-  } catch (error: any) {
-    console.error('Get points error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get points' }, { status: 500 });
-  }
-}
+      history: pointsEntries.map(formatPoints),
+    };
+  },
+});
 
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Add points',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { points, reason, metadata, pointsId } = body;
 
     if (!points || !reason) {
@@ -76,18 +40,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {},
     });
 
-    return NextResponse.json({
-      entry: {
-        id: pointsEntry.pointsId,
-        points: pointsEntry.points,
-        reason: pointsEntry.reason,
-        date: pointsEntry.date.toISOString(),
-        metadata: pointsEntry.metadata,
-      },
-    });
-  } catch (error: any) {
-    console.error('Add points error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to add points' }, { status: 500 });
-  }
-}
+    return { entry: formatPoints(pointsEntry) };
+  },
+});
 

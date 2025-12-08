@@ -56,6 +56,63 @@ jest.mock('@/lib/rateLimiter', () => ({
     read: { maxRequests: 200, windowMs: 60000 },
   },
 }));
+jest.mock('@/lib/cache/queryCache', () => ({
+  getCachedQueryResult: jest.fn((key, params, queryFn) => queryFn()),
+}));
+jest.mock('@/lib/api/routeHandler', () => {
+  const { NextResponse } = require('next/server');
+  return {
+    createApiHandler: jest.fn((options) => {
+      return async (request: any) => {
+        try {
+          // Check if auth is required and mock it
+          if (options.requireAuth || options.requireAdmin) {
+            const { requireAuth, requireAdmin, createAuthErrorResponse } = require('@/lib/authMiddleware');
+            let auth;
+            if (options.requireAdmin) {
+              auth = await requireAdmin(request);
+            } else {
+              auth = await requireAuth(request);
+            }
+            if (!auth.authenticated) {
+              return createAuthErrorResponse(auth);
+            }
+            const context = {
+              userId: auth.userId || 'user123',
+              isAdmin: auth.isAdmin || false,
+              email: auth.email,
+              rateLimitRemaining: 99,
+              request,
+            };
+            const result = await options.handler(request, context);
+            if (result && typeof result === 'object' && 'status' in result && 'json' in result) {
+              return result;
+            }
+            return NextResponse.json(result);
+          } else {
+            const context = {
+              userId: '',
+              isAdmin: false,
+              email: undefined,
+              rateLimitRemaining: 99,
+              request,
+            };
+            const result = await options.handler(request, context);
+            if (result && typeof result === 'object' && 'status' in result && 'json' in result) {
+              return result;
+            }
+            return NextResponse.json(result);
+          }
+        } catch (error: any) {
+          return NextResponse.json(
+            { error: error.message || 'An error occurred' },
+            { status: 500 }
+          );
+        }
+      };
+    }),
+  };
+});
 jest.mock('@/data/objections', () => ({
   initialObjections: [
     { id: '1', text: 'Objection 1', category: 'Price' },

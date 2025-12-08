@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import CustomResponse from '@/lib/models/CustomResponse';
 import ConfidenceRating from '@/lib/models/ConfidenceRating';
 import PracticeSession from '@/lib/models/PracticeSession';
@@ -10,29 +9,16 @@ import Points from '@/lib/models/Points';
 import ReviewSchedule from '@/lib/models/ReviewSchedule';
 import LearningPathProgress from '@/lib/models/LearningPathProgress';
 import VoiceSession from '@/lib/models/VoiceSession';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.api,
+  requireAuth: true,
+  errorContext: 'Migrate data',
+  handler: async (req, { userId }) => {
 
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+    const body = await req.json();
     const { data } = body;
 
     if (!data) {
@@ -281,17 +267,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return {
       success: true,
       migrated: results,
       message: 'Migration completed successfully',
-    });
-  } catch (error: any) {
-    console.error('Migration error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Migration failed' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+});
 

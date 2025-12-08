@@ -1,29 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import LearningPathProgress from '@/lib/models/LearningPathProgress';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get learning path progress',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const pathId = searchParams.get('pathId');
 
     const query: any = { userId };
@@ -32,8 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const progress = await LearningPathProgress.find(query).lean();
-
-    return NextResponse.json({
+    return {
       progress: progress.map((p) => ({
         pathId: p.pathId,
         currentStep: p.currentStep,
@@ -42,31 +26,16 @@ export async function GET(request: NextRequest) {
         completedAt: p.completedAt?.toISOString(),
         lastPracticedAt: p.lastPracticedAt?.toISOString(),
       })),
-    });
-  } catch (error: any) {
-    console.error('Get learning path progress error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get progress' }, { status: 500 });
-  }
-}
+    };
+  },
+});
 
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Save learning path progress',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { progress } = body;
 
     if (!progress || !progress.pathId) {
@@ -101,7 +70,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return {
       progress: {
         pathId: progressDoc.pathId,
         currentStep: progressDoc.currentStep,
@@ -110,10 +79,7 @@ export async function POST(request: NextRequest) {
         completedAt: progressDoc.completedAt?.toISOString(),
         lastPracticedAt: progressDoc.lastPracticedAt?.toISOString(),
       },
-    });
-  } catch (error: any) {
-    console.error('Save learning path progress error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to save progress' }, { status: 500 });
-  }
-}
+    };
+  },
+});
 

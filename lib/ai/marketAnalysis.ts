@@ -4,6 +4,9 @@
  */
 
 import { PropertyDetails, ComparableProperty, MarketData } from '@/lib/marketData/types';
+import { getCachedAIResponse, cacheAIResponse } from '@/lib/cache/aiCache';
+import { trackAPICost, calculateOpenAICost } from '@/lib/costTracking';
+import { deduplicateRequest } from '@/lib/utils/requestDeduplication';
 
 export interface CompAnalysis {
   ranking: Array<{
@@ -54,129 +57,111 @@ export async function analyzeComps(
     return getBasicCompAnalysis(potentialComps);
   }
 
-  const systemPrompt = `You are an expert real estate appraiser with 20 years of experience in property valuation. Your task is to analyze comparable properties and determine which are the best matches for a subject property.`;
-
-  const userPrompt = `Analyze these properties and determine which are the best comparables for the subject property.
-
-Subject Property:
-- Address: ${subjectProperty.address}
-- Bedrooms: ${subjectProperty.bedrooms || 'N/A'}
-- Bathrooms: ${subjectProperty.bathrooms || 'N/A'}
-- Square Feet: ${subjectProperty.squareFeet || 'N/A'}
-- Property Type: ${subjectProperty.propertyType || 'N/A'}
-- Condition: ${subjectProperty.condition || 'N/A'}
-- Year Built: ${subjectProperty.yearBuilt || 'N/A'}
-
-Potential Comparables:
-${potentialComps.map((comp, i) => `
-${i + 1}. ${comp.address}
-   - Sold Price: $${comp.soldPrice.toLocaleString()}
-   - Sold Date: ${comp.soldDate}
-   - Distance: ${comp.distance?.toFixed(2) || 'N/A'} miles
-   - Bedrooms: ${comp.bedrooms || 'N/A'}
-   - Bathrooms: ${comp.bathrooms || 'N/A'}
-   - Square Feet: ${comp.squareFeet || 'N/A'}
-   - Property Type: ${comp.propertyType || 'N/A'}
-`).join('\n')}
-
-Market Context:
-- Estimated Value: ${marketContext.estimatedValue ? `$${marketContext.estimatedValue.toLocaleString()}` : 'N/A'}
-- Data Source: ${marketContext.dataSource}
-
-Please provide:
-1. Rank the comparables from best to worst match (1 = best)
-2. For each comp, provide:
-   - A relevance score (0-100)
-   - Reasoning for why it is or isn't a good comp
-   - Adjustments needed for differences (size, condition, location, timing) in dollars
-3. Based on the best comps, provide:
-   - Recommended ARV (After Repair Value) with confidence range
-   - Key factors influencing the value
-   - Risk assessment (low/medium/high) with factors
-   - Investment recommendations
-
-Format your response as JSON with this structure:
-{
-  "ranking": [
-    {
-      "compId": <index starting from 0>,
-      "score": <number 0-100>,
-      "reasoning": "<explanation>",
-      "adjustments": {
-        "size": <dollar adjustment>,
-        "condition": <dollar adjustment>,
-        "location": <dollar adjustment>,
-        "timing": <dollar adjustment>
+  // Check cache first
+  const cacheInput = {
+    address: subjectProperty.address,
+    comps: potentialComps.map(c => ({ address: c.address, soldPrice: c.soldPrice, soldDate: c.soldDate })),
+    estimatedValue: marketContext.estimatedValue,
+  };
+  
+  // Use deduplication to prevent duplicate requests
+  const cacheKey = `analyzeComps:${JSON.stringify(cacheInput)}`;
+  return deduplicateRequest(cacheKey, async () => {
+    try {
+      const cached = await getCachedAIResponse<CompAnalysis>('market-analysis', cacheInput);
+      if (cached) {
+        return cached;
       }
-    }
-  ],
-  "recommendedARV": {
-    "value": <number>,
-    "range": { "min": <number>, "max": <number> },
-    "confidence": <number 0-100>,
-    "factors": ["<factor1>", "<factor2>"]
-  },
-  "riskAssessment": {
-    "level": "low" | "medium" | "high",
-    "factors": ["<risk1>", "<risk2>"]
-  },
-  "recommendations": ["<recommendation1>", "<recommendation2>"]
+
+      // Optimized prompts - reduced token usage by ~30%
+      const systemPrompt = `Expert real estate appraiser. Analyze comparables and rank by relevance.`;
+
+      const userPrompt = `Subject: ${subjectProperty.address} | ${subjectProperty.bedrooms || 'N/A'}br/${subjectProperty.bathrooms || 'N/A'}ba | ${subjectProperty.squareFeet || 'N/A'}sqft | ${subjectProperty.propertyType || 'N/A'}
+
+Comps:
+${potentialComps.map((comp, i) => `${i}. ${comp.address}: $${comp.soldPrice.toLocaleString()} (${comp.soldDate}) | ${comp.bedrooms || 'N/A'}br/${comp.bathrooms || 'N/A'}ba | ${comp.squareFeet || 'N/A'}sqft | ${comp.distance?.toFixed(1) || 'N/A'}mi`).join('\n')}
+
+Est Value: ${marketContext.estimatedValue ? `$${marketContext.estimatedValue.toLocaleString()}` : 'N/A'}
+
+Return JSON:
+{
+  "ranking": [{"compId": 0, "score": 85, "reasoning": "...", "adjustments": {"size": 0, "condition": 0, "location": 0, "timing": 0}}],
+  "recommendedARV": {"value": 250000, "range": {"min": 240000, "max": 260000}, "confidence": 75, "factors": ["factor1"]},
+  "riskAssessment": {"level": "medium", "factors": ["risk1"]},
+  "recommendations": ["rec1"]
 }`;
 
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // Using cost-effective model
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3, // Lower temperature for more consistent, factual responses
-        response_format: { type: 'json_object' },
-      }),
-    });
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // Using cost-effective model
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3, // Lower temperature for more consistent, factual responses
+          response_format: { type: 'json_object' },
+        }),
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('OpenAI API error:', error);
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('OpenAI API error:', error);
+        // Fallback to basic analysis
+        return getBasicCompAnalysis(potentialComps);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        return getBasicCompAnalysis(potentialComps);
+      }
+
+      // Track API cost
+      const usage = data.usage;
+      if (usage) {
+        const cost = calculateOpenAICost('gpt-4o-mini', usage.prompt_tokens || 0, usage.completion_tokens || 0);
+        trackAPICost('openai', cost, undefined, {
+          model: 'gpt-4o-mini',
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          task: 'market-analysis',
+        }).catch(console.error);
+      }
+
+      const analysis = JSON.parse(content);
+      
+      // Validate and normalize the response
+      const result: CompAnalysis = {
+        ranking: analysis.ranking || [],
+        recommendedARV: analysis.recommendedARV || {
+          value: marketContext.estimatedValue || 0,
+          range: { min: 0, max: 0 },
+          confidence: 50,
+          factors: [],
+        },
+        riskAssessment: analysis.riskAssessment || {
+          level: 'medium',
+          factors: [],
+        },
+        recommendations: analysis.recommendations || [],
+      };
+
+      // Cache the result for 24 hours
+      await cacheAIResponse('market-analysis', cacheInput, result, 86400);
+
+      return result;
+    } catch (error) {
+      console.error('Error analyzing comps with AI:', error);
       // Fallback to basic analysis
       return getBasicCompAnalysis(potentialComps);
     }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) {
-      return getBasicCompAnalysis(potentialComps);
-    }
-
-    const analysis = JSON.parse(content);
-    
-    // Validate and normalize the response
-    return {
-      ranking: analysis.ranking || [],
-      recommendedARV: analysis.recommendedARV || {
-        value: marketContext.estimatedValue || 0,
-        range: { min: 0, max: 0 },
-        confidence: 50,
-        factors: [],
-      },
-      riskAssessment: analysis.riskAssessment || {
-        level: 'medium',
-        factors: [],
-      },
-      recommendations: analysis.recommendations || [],
-    };
-  } catch (error) {
-    console.error('Error analyzing comps with AI:', error);
-    // Fallback to basic analysis
-    return getBasicCompAnalysis(potentialComps);
-  }
+  });
 }
 
 /**
@@ -191,82 +176,102 @@ export async function analyzeMarketTrends(
     return getBasicMarketTrends(comps);
   }
 
-  // Sort comps by date
-  const sortedComps = [...comps].sort((a, b) => 
-    new Date(b.soldDate).getTime() - new Date(a.soldDate).getTime()
-  );
+  // Check cache first
+  const cacheInput = {
+    location,
+    comps: comps.slice(0, 10).map(c => ({ address: c.address, soldPrice: c.soldPrice, soldDate: c.soldDate })),
+  };
+  
+  // Use deduplication to prevent duplicate requests
+  const cacheKey = `analyzeMarketTrends:${JSON.stringify(cacheInput)}`;
+  return deduplicateRequest(cacheKey, async () => {
+    try {
+      const cached = await getCachedAIResponse<MarketTrends>('market-analysis', cacheInput);
+      if (cached) {
+        return cached;
+      }
 
-  const systemPrompt = `You are a real estate market analyst specializing in identifying trends and predicting market movements.`;
+      // Sort comps by date
+      const sortedComps = [...comps].sort((a, b) => 
+        new Date(b.soldDate).getTime() - new Date(a.soldDate).getTime()
+      );
 
-  const userPrompt = `Analyze these market trends for ${location}:
+      // Optimized prompt - reduced token usage
+      const systemPrompt = `Real estate market analyst. Identify trends and predict movements.`;
 
-Recent Sales Data:
-${sortedComps.slice(0, 10).map(comp => 
-  `- ${comp.address}: Sold $${comp.soldPrice.toLocaleString()} on ${comp.soldDate} (${comp.squareFeet || 'N/A'} sqft)`
-).join('\n')}
+      const userPrompt = `Location: ${location}
 
-Provide:
-1. Price trend (increasing/decreasing/stable)
-2. Market velocity indicators
-3. Insights about the market
-4. Predictions for next 3-6 months
-5. Confidence level (0-100)
+Sales: ${sortedComps.slice(0, 10).map(c => `${c.address}: $${c.soldPrice.toLocaleString()} (${c.soldDate})`).join(' | ')}
 
-Format as JSON:
+Return JSON:
 {
-  "direction": "up" | "down" | "stable",
-  "confidence": <number 0-100>,
-  "insights": ["<insight1>", "<insight2>"],
-  "predictions": {
-    "next3Months": "<prediction>",
-    "next6Months": "<prediction>"
-  }
+  "direction": "up"|"down"|"stable",
+  "confidence": 75,
+  "insights": ["insight1"],
+  "predictions": {"next3Months": "...", "next6Months": "..."}
 }`;
 
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.4,
-        response_format: { type: 'json_object' },
-      }),
-    });
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.4,
+          response_format: { type: 'json_object' },
+        }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return getBasicMarketTrends(comps);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        return getBasicMarketTrends(comps);
+      }
+
+      // Track API cost
+      const usage = data.usage;
+      if (usage) {
+        const cost = calculateOpenAICost('gpt-4o-mini', usage.prompt_tokens || 0, usage.completion_tokens || 0);
+        trackAPICost('openai', cost, undefined, {
+          model: 'gpt-4o-mini',
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          task: 'market-trends',
+        }).catch(console.error);
+      }
+
+      const trends = JSON.parse(content);
+      
+      const result: MarketTrends = {
+        direction: trends.direction || 'stable',
+        confidence: trends.confidence || 50,
+        insights: trends.insights || [],
+        predictions: trends.predictions || {
+          next3Months: 'Market conditions appear stable.',
+          next6Months: 'Monitor market trends closely.',
+        },
+      };
+
+      // Cache the result for 24 hours
+      await cacheAIResponse('market-analysis', cacheInput, result, 86400);
+
+      return result;
+    } catch (error) {
+      console.error('Error analyzing market trends:', error);
       return getBasicMarketTrends(comps);
     }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) {
-      return getBasicMarketTrends(comps);
-    }
-
-    const trends = JSON.parse(content);
-    
-    return {
-      direction: trends.direction || 'stable',
-      confidence: trends.confidence || 50,
-      insights: trends.insights || [],
-      predictions: trends.predictions || {
-        next3Months: 'Market conditions appear stable.',
-        next6Months: 'Monitor market trends closely.',
-      },
-    };
-  } catch (error) {
-    console.error('Error analyzing market trends:', error);
-    return getBasicMarketTrends(comps);
-  }
+  });
 }
 
 /**

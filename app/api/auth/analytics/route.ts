@@ -1,30 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import UserActivity from '@/lib/models/UserActivity';
 import PracticeSession from '@/lib/models/PracticeSession';
-import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAdmin: true,
+  errorContext: 'Get analytics',
+  handler: async (req) => {
 
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require admin authentication
-    const auth = await requireAdmin(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get('days') || '30', 10);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
@@ -140,7 +127,7 @@ export async function GET(request: NextRequest) {
     // Calculate most active users (top 10)
     const topUsers = userMetrics.slice(0, 10);
 
-    return NextResponse.json({
+    return {
       period: {
         days,
         startDate: startDate.toISOString(),
@@ -164,13 +151,7 @@ export async function GET(request: NextRequest) {
         hourlyActivity,
         activityByType,
       },
-    });
-  } catch (error: any) {
-    console.error('Get analytics error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get analytics' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+});
 

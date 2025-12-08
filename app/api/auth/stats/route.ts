@@ -1,38 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import UserActivity from '@/lib/models/UserActivity';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get user stats',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
+    const userIdParam = searchParams.get('userId') || userId;
 
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId') || auth.userId;
-
-    if (!userId) {
+    if (!userIdParam) {
       return NextResponse.json(
         { error: 'User ID required' },
         { status: 400 }
       );
     }
 
-    const activities = await UserActivity.find({ userId })
+    const activities = await UserActivity.find({ userId: userIdParam })
       .sort({ timestamp: -1 })
       .lean();
 
@@ -46,18 +32,12 @@ export async function GET(request: NextRequest) {
       actionsByType[a.action] = (actionsByType[a.action] || 0) + 1;
     });
 
-    return NextResponse.json({
+    return {
       totalLogins: logins.length,
       lastLoginAt: logins.length > 0 ? logins[0].timestamp.toISOString() : null,
       totalSessions: sessions,
       actionsByType,
-    });
-  } catch (error: any) {
-    console.error('Get stats error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get stats' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+});
 

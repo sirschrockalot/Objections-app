@@ -5,6 +5,9 @@
 
 import { VoiceSession, ConversationMessage, AIFeedback, QualityMetrics, AIRecommendation, ResponseAnalysis } from '@/types';
 import { getObjections } from './storage';
+import { getCachedAIResponse, cacheAIResponse } from '@/lib/cache/aiCache';
+import { trackAPICost, calculateOpenAICost } from '@/lib/costTracking';
+import { deduplicateRequest } from '@/lib/utils/requestDeduplication';
 
 const AI_FEEDBACK_CACHE_KEY = 'response-ready-ai-feedback-cache';
 
@@ -68,10 +71,10 @@ function cacheFeedback(sessionId: string, feedback: AIFeedback): void {
  * Analyze a voice session using AI API
  */
 export async function analyzeSessionWithAI(session: VoiceSession): Promise<AIFeedback> {
-  // Check cache first
-  const cached = getCachedFeedback(session.id);
-  if (cached) {
-    return cached;
+  // Check client-side cache first (for immediate response)
+  const clientCached = getCachedFeedback(session.id);
+  if (clientCached) {
+    return clientCached;
   }
 
   const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
@@ -79,146 +82,130 @@ export async function analyzeSessionWithAI(session: VoiceSession): Promise<AIFee
     throw new Error('OpenAI API key not configured. Please set NEXT_PUBLIC_OPENAI_API_KEY in your environment variables.');
   }
 
-  // Prepare conversation context
-  const conversation = session.messages
-    .map((msg) => `${msg.type === 'user' ? 'Agent' : 'Buyer'}: ${msg.text}`)
-    .join('\n');
+  // Check server-side cache with deduplication
+  const cacheInput = {
+    sessionId: session.id,
+    messages: session.messages.map(m => ({ type: m.type, text: m.text })),
+    metrics: session.metrics,
+  };
+  
+  // Use deduplication to prevent duplicate requests
+  const cacheKey = `analyzeSession:${session.id}`;
+  return deduplicateRequest(cacheKey, async () => {
+    try {
+      const serverCached = await getCachedAIResponse<AIFeedback>('feedback', cacheInput);
+      if (serverCached) {
+        // Also cache client-side for faster access
+        cacheFeedback(session.id, serverCached);
+        return serverCached;
+      }
 
-  // Get objections data for context
-  const objections = await getObjections();
-  const objectionsContext = objections
-    .map((obj) => `- ${obj.text}`)
-    .slice(0, 10) // Limit to first 10 for context
-    .join('\n');
+      // Prepare conversation context (optimized - reduced token usage)
+      const conversation = session.messages
+        .map((msg) => `${msg.type === 'user' ? 'A' : 'B'}: ${msg.text}`)
+        .join('\n');
 
-  const systemPrompt = `You are an expert real estate sales coach analyzing a practice conversation between a disposition agent and a potential buyer. 
+      // Get objections data for context (limit to 5 for token savings)
+      const objections = await getObjections();
+      const objectionsContext = objections
+        .slice(0, 5)
+        .map((obj) => obj.text)
+        .join('; ');
 
-Your task is to:
-1. Evaluate the agent's responses for quality, clarity, empathy, and effectiveness
-2. Identify strengths and areas for improvement
-3. Provide specific, actionable recommendations
-4. Score responses on a 0-100 scale
+      // Optimized prompts - reduced by ~40% token usage
+      const systemPrompt = `Real estate sales coach. Evaluate agent responses (quality, clarity, empathy). Score 0-100.`;
 
-Context - Common Objections:
-${objectionsContext}
-
-Best Practices:
-- Acknowledge the buyer's concern first
-- Provide specific, relevant information
-- Build rapport and trust
-- Address objections directly
-- Use clear, confident language
-- Guide toward next steps
-
-Analyze the conversation and provide detailed feedback.`;
-
-  const userPrompt = `Analyze this practice conversation:
-
+      const userPrompt = `Conversation:
 ${conversation}
 
-Session Details:
-- Duration: ${session.metrics.totalDuration} seconds
-- Messages: ${session.metrics.messagesExchanged}
-- Average Response Time: ${session.metrics.averageResponseTime?.toFixed(1) || 'N/A'} seconds
+Metrics: ${session.metrics.totalDuration}s, ${session.metrics.messagesExchanged} msgs, ${session.metrics.averageResponseTime?.toFixed(1) || 'N/A'}s avg
 
-Provide a comprehensive analysis in JSON format with this structure:
+Objections: ${objectionsContext}
+
+Return JSON:
 {
-  "overallScore": <number 0-100>,
-  "strengths": [<array of 3-5 specific strengths>],
-  "improvementAreas": [<array of 3-5 specific areas needing work>],
-  "qualityMetrics": {
-    "clarity": <number 0-100>,
-    "empathy": <number 0-100>,
-    "structure": <number 0-100>,
-    "objectionHandling": <number 0-100>,
-    "closingTechnique": <number 0-100>
-  },
-  "recommendations": [
-    {
-      "type": "technique" | "objection" | "practice" | "general",
-      "priority": "high" | "medium" | "low",
-      "title": "<short title>",
-      "description": "<detailed description>",
-      "actionItems": [<array of 2-3 specific actions>]
+  "overallScore": 75,
+  "strengths": ["strength1"],
+  "improvementAreas": ["area1"],
+  "qualityMetrics": {"clarity": 80, "empathy": 70, "structure": 75, "objectionHandling": 80, "closingTechnique": 70},
+  "recommendations": [{"type": "technique", "priority": "high", "title": "...", "description": "...", "actionItems": ["action1"]}],
+  "responseAnalysis": [{"messageId": "1", "userMessage": "...", "agentMessage": "...", "score": 80, "feedback": "...", "strengths": [], "improvements": []}]
+}`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', // Using cost-effective model
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.7,
+          response_format: { type: 'json_object' },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`OpenAI API error: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No response from AI');
+      }
+
+      // Track API cost
+      const usage = data.usage;
+      if (usage) {
+        const cost = calculateOpenAICost('gpt-4o-mini', usage.prompt_tokens || 0, usage.completion_tokens || 0);
+        trackAPICost('openai', cost, undefined, {
+          model: 'gpt-4o-mini',
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          task: 'feedback',
+        }).catch(console.error);
+      }
+
+      // Parse JSON response
+      const analysis = JSON.parse(content);
+
+      // Build feedback object
+      const feedback: AIFeedback = {
+        sessionId: session.id,
+        overallScore: analysis.overallScore || 0,
+        strengths: analysis.strengths || [],
+        improvementAreas: analysis.improvementAreas || [],
+        recommendations: analysis.recommendations || [],
+        qualityMetrics: {
+          clarity: analysis.qualityMetrics?.clarity || 0,
+          empathy: analysis.qualityMetrics?.empathy || 0,
+          structure: analysis.qualityMetrics?.structure || 0,
+          objectionHandling: analysis.qualityMetrics?.objectionHandling || 0,
+          closingTechnique: analysis.qualityMetrics?.closingTechnique || 0,
+          averageResponseTime: session.metrics.averageResponseTime || 0,
+        },
+        responseAnalysis: analysis.responseAnalysis || [],
+        generatedAt: new Date().toISOString(),
+        model: 'gpt-4o-mini',
+      };
+
+      // Cache both client-side and server-side
+      cacheFeedback(session.id, feedback);
+      await cacheAIResponse('feedback', cacheInput, feedback, 86400); // 24 hours
+
+      return feedback;
+    } catch (error) {
+      console.error('Error analyzing session with AI:', error);
+      throw error;
     }
-  ],
-  "responseAnalysis": [
-    {
-      "messageId": "<message id>",
-      "userMessage": "<agent's response text>",
-      "agentMessage": "<buyer's objection/context>",
-      "score": <number 0-100>,
-      "feedback": "<specific feedback for this response>",
-      "strengths": [<array of strengths>],
-      "improvements": [<array of improvements>],
-      "suggestedResponse": "<optional improved response example>"
-    }
-  ]
-}
-
-Focus on the agent's responses (marked as "Agent:"). Be specific and constructive.`;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // Using cost-effective model
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        response_format: { type: 'json_object' },
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`OpenAI API error: ${error.error?.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No response from AI');
-    }
-
-    // Parse JSON response
-    const analysis = JSON.parse(content);
-
-    // Build feedback object
-    const feedback: AIFeedback = {
-      sessionId: session.id,
-      overallScore: analysis.overallScore || 0,
-      strengths: analysis.strengths || [],
-      improvementAreas: analysis.improvementAreas || [],
-      recommendations: analysis.recommendations || [],
-      qualityMetrics: {
-        clarity: analysis.qualityMetrics?.clarity || 0,
-        empathy: analysis.qualityMetrics?.empathy || 0,
-        structure: analysis.qualityMetrics?.structure || 0,
-        objectionHandling: analysis.qualityMetrics?.objectionHandling || 0,
-        closingTechnique: analysis.qualityMetrics?.closingTechnique || 0,
-        averageResponseTime: session.metrics.averageResponseTime || 0,
-      },
-      responseAnalysis: analysis.responseAnalysis || [],
-      generatedAt: new Date().toISOString(),
-      model: 'gpt-4o-mini',
-    };
-
-    // Cache the result
-    cacheFeedback(session.id, feedback);
-
-    return feedback;
-  } catch (error) {
-    console.error('Error analyzing session with AI:', error);
-    throw error;
-  }
+  });
 }
 
 /**

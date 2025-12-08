@@ -1,29 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import PracticeHistory from '@/lib/models/PracticeHistory';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
-
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get practice history',
+  handler: async (req, { userId }) => {
+    const { searchParams } = new URL(req.url);
     const objectionId = searchParams.get('objectionId');
 
     const query: any = { userId };
@@ -32,8 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const history = await PracticeHistory.find(query).sort({ date: 1 }).lean();
-
-    return NextResponse.json({
+    return {
       history: history.map((h) => ({
         objectionId: h.objectionId,
         date: h.date,
@@ -41,31 +25,16 @@ export async function GET(request: NextRequest) {
         confidenceRating: h.confidenceRating,
         timesPracticed: h.timesPracticed,
       })),
-    });
-  } catch (error: any) {
-    console.error('Get practice history error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to get history' }, { status: 500 });
-  }
-}
+    };
+  },
+});
 
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Record practice history',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { objectionId, sessionId, confidenceRating } = body;
 
     if (!objectionId || !sessionId) {
@@ -81,7 +50,7 @@ export async function POST(request: NextRequest) {
         existing.confidenceRating = confidenceRating;
       }
       await existing.save();
-      return NextResponse.json({
+      return {
         entry: {
           objectionId: existing.objectionId,
           date: existing.date,
@@ -89,7 +58,7 @@ export async function POST(request: NextRequest) {
           confidenceRating: existing.confidenceRating,
           timesPracticed: existing.timesPracticed,
         },
-      });
+      };
     } else {
       // Count existing entries for this objection
       const allHistoryForObjection = await PracticeHistory.find({ userId, objectionId });
@@ -102,7 +71,7 @@ export async function POST(request: NextRequest) {
         timesPracticed: allHistoryForObjection.length + 1,
       });
 
-      return NextResponse.json({
+      return {
         entry: {
           objectionId: newEntry.objectionId,
           date: newEntry.date,
@@ -110,11 +79,8 @@ export async function POST(request: NextRequest) {
           confidenceRating: newEntry.confidenceRating,
           timesPracticed: newEntry.timesPracticed,
         },
-      });
+      };
     }
-  } catch (error: any) {
-    console.error('Record practice history error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to record history' }, { status: 500 });
-  }
-}
+  },
+});
 

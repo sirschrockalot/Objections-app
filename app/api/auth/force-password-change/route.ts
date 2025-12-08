@@ -1,32 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import UserActivity from '@/lib/models/UserActivity';
 import bcrypt from 'bcryptjs';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
 import { validatePassword } from '@/lib/passwordValidation';
+import { formatUser } from '@/lib/api/responseFormatters';
 
-const authRateLimit = createRateLimitMiddleware(RATE_LIMITS.auth);
-
-export async function POST(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await authRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    const body = await request.json();
+export const POST = createApiHandler({
+  rateLimit: RATE_LIMITS.auth,
+  requireAuth: true,
+  errorContext: 'Force password change',
+  handler: async (req, { userId }) => {
+    const body = await req.json();
     const { newPassword } = body;
 
     if (!newPassword) {
@@ -71,32 +57,14 @@ export async function POST(request: NextRequest) {
       action: 'password_change_forced',
       metadata: {},
       timestamp: new Date(),
-      userAgent: request.headers.get('user-agent') || undefined,
-      url: request.headers.get('referer') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+      url: req.headers.get('referer') || undefined,
     });
 
-    const response = NextResponse.json({ 
+    return {
       success: true,
-      user: {
-        id: user._id.toString(),
-        username: user.username,
-        email: user.email,
-        createdAt: user.createdAt.toISOString(),
-        lastLoginAt: user.lastLoginAt?.toISOString(),
-        isActive: user.isActive,
-        isAdmin: user.isAdmin || false,
-        mustChangePassword: false,
-      },
-    });
-    
-    response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
-    return response;
-  } catch (error: any) {
-    console.error('Force password change error:', error);
-    return NextResponse.json(
-      { error: 'Failed to change password' },
-      { status: 500 }
-    );
-  }
-}
+      user: { ...formatUser(user), mustChangePassword: false },
+    };
+  },
+});
 

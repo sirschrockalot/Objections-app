@@ -1,38 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
 import PracticeSession from '@/lib/models/PracticeSession';
 import ConfidenceRating from '@/lib/models/ConfidenceRating';
 import ReviewSchedule from '@/lib/models/ReviewSchedule';
 import Points from '@/lib/models/Points';
 import { initialObjections } from '@/data/objections';
-import { requireAuth, createAuthErrorResponse } from '@/lib/authMiddleware';
-import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
+import { createApiHandler } from '@/lib/api/routeHandler';
+import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { getCachedQueryResult } from '@/lib/cache/queryCache';
 
-const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.read);
+export const GET = createApiHandler({
+  rateLimit: RATE_LIMITS.read,
+  requireAuth: true,
+  errorContext: 'Get stats',
+  handler: async (req, { userId }) => {
 
-export async function GET(request: NextRequest) {
-  try {
-    // Apply rate limiting
-    const rateLimitResult = await apiRateLimit(request);
-    if (!rateLimitResult.allowed) {
-      return rateLimitResult.response!;
-    }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (!auth.authenticated) {
-      return createAuthErrorResponse(auth);
-    }
-
-    await connectDB();
-    const userId = auth.userId!;
-
-    // Fetch all data in parallel
+    // Fetch all data in parallel with caching (5 minute cache)
     const [sessions, ratings, reviewSchedules, pointsEntries] = await Promise.all([
-      PracticeSession.find({ userId }).lean(),
-      ConfidenceRating.find({ userId }).lean(),
-      ReviewSchedule.find({ userId }).lean(),
-      Points.find({ userId }).sort({ date: -1 }).lean(),
+      getCachedQueryResult(
+        'PracticeSession',
+        { userId },
+        () => PracticeSession.find({ userId }).lean(),
+        300 // 5 minutes
+      ),
+      getCachedQueryResult(
+        'ConfidenceRating',
+        { userId },
+        () => ConfidenceRating.find({ userId }).lean(),
+        300
+      ),
+      getCachedQueryResult(
+        'ReviewSchedule',
+        { userId },
+        () => ReviewSchedule.find({ userId }).lean(),
+        300
+      ),
+      getCachedQueryResult(
+        'Points',
+        { userId, sort: { date: -1 } },
+        () => Points.find({ userId }).sort({ date: -1 }).lean(),
+        300
+      ),
     ]);
 
     // Calculate total sessions
@@ -205,7 +212,7 @@ export async function GET(request: NextRequest) {
     const pointsToNextLevel = nextLevel.points - totalPoints;
     const currentLevelPoints = totalPoints - userLevel.points;
 
-    return NextResponse.json({
+    return {
       // Basic stats
       totalSessions,
       totalObjectionsPracticed,
@@ -237,13 +244,7 @@ export async function GET(request: NextRequest) {
       
       // Recent points (last 5 entries)
       recentPoints: pointsEntries.slice(0, 5).reduce((sum, entry) => sum + entry.points, 0),
-    });
-  } catch (error: any) {
-    console.error('Get stats error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get stats' },
-      { status: 500 }
-    );
-  }
-}
+    };
+  },
+});
 
