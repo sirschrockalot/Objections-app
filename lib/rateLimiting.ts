@@ -2,6 +2,8 @@
  * Rate limiting and usage tracking for ElevenLabs API
  */
 
+import { error as logError } from './logger';
+
 export interface UsageStats {
   date: string; // ISO date string (YYYY-MM-DD)
   minutesUsed: number; // Total minutes of conversation
@@ -31,7 +33,7 @@ export function getUsageStats(): UsageStats[] {
     if (!stored) return [];
     return JSON.parse(stored) as UsageStats[];
   } catch (error) {
-    console.error('Error loading usage stats:', error);
+    logError('Failed to load usage stats', error);
     return [];
   }
 }
@@ -127,7 +129,7 @@ export function recordUsage(
 
     localStorage.setItem(USAGE_STATS_KEY, JSON.stringify(filteredStats));
   } catch (error) {
-    console.error('Error recording usage:', error);
+    logError('Failed to record usage', error);
   }
 }
 

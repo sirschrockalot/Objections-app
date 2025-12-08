@@ -2,6 +2,8 @@
  * Audio utilities for microphone capture and audio playback
  */
 
+import { error as logError } from './logger';
+
 export interface AudioCaptureOptions {
   sampleRate?: number;
   channelCount?: number;
@@ -61,7 +63,7 @@ export class AudioCapture {
       // Start recording in chunks (every 100ms for real-time streaming)
       this.mediaRecorder.start(100);
     } catch (error) {
-      console.error('Error starting audio capture:', error);
+      logError('Failed to start audio capture', error);
       throw new Error(
         error instanceof Error
           ? error.message
@@ -168,7 +170,7 @@ export class AudioPlayback {
         }
       });
     } catch (error) {
-      console.error('Error playing audio:', error);
+      logError('Failed to play audio', error);
       throw error;
     }
   }
@@ -179,7 +181,7 @@ export class AudioPlayback {
       const blob = await response.blob();
       return this.playAudio(blob);
     } catch (error) {
-      console.error('Error playing audio from URL:', error);
+      logError('Failed to play audio from URL', error);
       throw error;
     }
   }

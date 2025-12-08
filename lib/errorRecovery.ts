@@ -3,6 +3,8 @@
  * Handles storage failures, network errors, and data corruption gracefully
  */
 
+import { error as logError } from './logger';
+
 export interface ErrorRecoveryOptions {
   retry?: boolean;
   fallback?: () => void;
@@ -24,10 +26,10 @@ export function handleStorageError(
   error: unknown,
   options: ErrorRecoveryOptions = {}
 ): StorageError {
-  const { logError = true } = options;
+  const { logError: shouldLog = true } = options;
 
-  if (logError) {
-    console.error('Storage error:', error);
+  if (shouldLog) {
+    logError('Storage error occurred', error);
   }
 
   if (error instanceof DOMException) {
@@ -181,7 +183,7 @@ export function createDataBackup(data: unknown, backupKey: string): boolean {
     localStorage.setItem(backupKey, JSON.stringify(backup));
     return true;
   } catch (error) {
-    console.error('Failed to create backup:', error);
+    logError('Failed to create backup', error);
     return false;
   }
 }
@@ -199,7 +201,7 @@ export function restoreFromBackup<T>(backupKey: string): T | null {
     const backup = JSON.parse(backupStr);
     return backup.data as T;
   } catch (error) {
-    console.error('Failed to restore from backup:', error);
+    logError('Failed to restore from backup', error);
     return null;
   }
 }
@@ -229,7 +231,7 @@ export async function safeStorageOperation<T>(
         }
         return { success: false, error: storageError };
       } catch (recoveryError) {
-        console.error('Recovery failed:', recoveryError);
+        logError('Recovery failed', recoveryError);
       }
     }
 

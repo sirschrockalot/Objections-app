@@ -2,6 +2,7 @@ import { PracticeHistoryEntry } from '@/types';
 import { getPracticeHistory, getLatestConfidenceRating, getConfidenceRatings, invalidateStatsCache } from './storage';
 import { apiGet, apiPost } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
+import { error as logError } from './logger';
 
 export interface ReviewSchedule {
   objectionId: string;
@@ -119,7 +120,7 @@ export async function getReviewSchedule(objectionId: string): Promise<ReviewSche
       }
       return null;
     } catch (error) {
-      console.error('Error getting review schedule from API:', error);
+      logError('Failed to get review schedule from API', error);
       // Fall through
     }
   }
@@ -142,7 +143,7 @@ export async function getReviewSchedule(objectionId: string): Promise<ReviewSche
       isDue,
     };
   } catch (error) {
-    console.error('Error getting review schedule:', error);
+    logError('Failed to get review schedule', error);
     return null;
   }
 }
@@ -159,7 +160,7 @@ export async function saveReviewSchedule(schedule: ReviewSchedule): Promise<void
       invalidateStatsCache(); // Invalidate cache when review schedule is updated
       return;
     } catch (error) {
-      console.error('Error saving review schedule to API:', error);
+      logError('Failed to save review schedule to API', error);
       // Fall through
     }
   }
@@ -179,7 +180,7 @@ export async function saveReviewSchedule(schedule: ReviewSchedule): Promise<void
     localStorage.setItem('objections-app-review-schedules', JSON.stringify(schedules));
     invalidateStatsCache(); // Invalidate cache when review schedule is updated
   } catch (error) {
-    console.error('Error saving review schedule:', error);
+    logError('Failed to save review schedule', error);
   }
 }
 
@@ -205,7 +206,7 @@ export async function getDueForReview(): Promise<string[]> {
       const data = await apiGet('/api/data/review-schedules', { dueOnly: 'true' });
       return (data.schedules || []).map((s: ReviewSchedule) => s.objectionId);
     } catch (error) {
-      console.error('Error getting due reviews from API:', error);
+      logError('Failed to get due reviews from API', error);
       // Fall through
     }
   }
@@ -238,7 +239,7 @@ export async function getAllReviewSchedules(): Promise<ReviewSchedule[]> {
       const data = await apiGet('/api/data/review-schedules');
       return data.schedules || [];
     } catch (error) {
-      console.error('Error getting review schedules from API:', error);
+      logError('Failed to get review schedules from API', error);
       // Fall through
     }
   }
@@ -256,7 +257,7 @@ export async function getAllReviewSchedules(): Promise<ReviewSchedule[]> {
       isDue: schedule.nextReviewDate <= today,
     }));
   } catch (error) {
-    console.error('Error getting review schedules:', error);
+    logError('Failed to get review schedules', error);
     return [];
   }
 }

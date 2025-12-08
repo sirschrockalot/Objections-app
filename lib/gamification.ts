@@ -2,6 +2,7 @@ import { PointsEntry, UserLevel, CategoryMastery } from '@/types';
 import { getPracticeSessions, getConfidenceRatings, getObjections, getCategoryStats, invalidateStatsCache } from './storage';
 import { apiGet, apiPost } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
+import { error as logError } from './logger';
 
 const POINTS_KEY = 'objections-app-points';
 
@@ -38,7 +39,7 @@ export async function addPoints(points: number, reason: string, metadata?: Recor
         metadata: data.entry.metadata,
       };
     } catch (error) {
-      console.error('Error adding points via API:', error);
+      logError('Failed to add points via API', error);
       // Fall through to localStorage
     }
   }
@@ -65,7 +66,7 @@ export async function addPoints(points: number, reason: string, metadata?: Recor
 
     return entry;
   } catch (error) {
-    console.error('Error adding points:', error);
+    logError('Failed to add points', error);
     throw error;
   }
 }
@@ -78,7 +79,7 @@ export async function getTotalPoints(): Promise<number> {
       const data = await apiGet('/api/data/points');
       return data.total || 0;
     } catch (error) {
-      console.error('Error getting total points from API:', error);
+      logError('Failed to get total points from API', error);
       // Fall through
     }
   }
@@ -94,7 +95,7 @@ export async function getTotalPoints(): Promise<number> {
       .filter(p => p.userId === userId)
       .reduce((sum, entry) => sum + entry.points, 0);
   } catch (error) {
-    console.error('Error getting total points:', error);
+    logError('Failed to get total points', error);
     return 0;
   }
 }
@@ -108,7 +109,7 @@ export async function getPointsHistory(limit?: number): Promise<PointsEntry[]> {
       const history = data.history || [];
       return limit ? history.slice(0, limit) : history;
     } catch (error) {
-      console.error('Error getting points history from API:', error);
+      logError('Failed to get points history from API', error);
       // Fall through
     }
   }
@@ -126,7 +127,7 @@ export async function getPointsHistory(limit?: number): Promise<PointsEntry[]> {
 
     return limit ? userPoints.slice(0, limit) : userPoints;
   } catch (error) {
-    console.error('Error getting points history:', error);
+    logError('Failed to get points history', error);
     return [];
   }
 }

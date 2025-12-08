@@ -3,6 +3,7 @@
  */
 
 import { ElevenLabsAgentConfig } from '@/types';
+import { error as logError } from './logger';
 
 const AGENT_CONFIG_KEY = 'response-ready-agent-config';
 const AGENT_CONFIGS_KEY = 'response-ready-agent-configs'; // Multiple profiles
@@ -89,7 +90,7 @@ export function getAgentConfig(): ElevenLabsAgentConfig {
       return JSON.parse(stored) as ElevenLabsAgentConfig;
     }
   } catch (error) {
-    console.error('Error loading agent config:', error);
+    logError('Failed to load agent config', error);
   }
 
   // Fallback to environment variable
@@ -107,7 +108,7 @@ export function saveAgentConfig(config: ElevenLabsAgentConfig): void {
   try {
     localStorage.setItem(AGENT_CONFIG_KEY, JSON.stringify(config));
   } catch (error) {
-    console.error('Error saving agent config:', error);
+    logError('Failed to save agent config', error);
   }
 }
 
@@ -122,7 +123,7 @@ export function getAgentConfigProfiles(): AgentConfigProfile[] {
     if (!stored) return [];
     return JSON.parse(stored) as AgentConfigProfile[];
   } catch (error) {
-    console.error('Error loading agent config profiles:', error);
+    logError('Failed to load agent config profiles', error);
     return [];
   }
 }
@@ -164,7 +165,7 @@ export function saveAgentConfigProfile(profile: Omit<AgentConfigProfile, 'create
 
     localStorage.setItem(AGENT_CONFIGS_KEY, JSON.stringify(profiles));
   } catch (error) {
-    console.error('Error saving agent config profile:', error);
+    logError('Failed to save agent config profile', error);
   }
 }
 
@@ -179,7 +180,7 @@ export function deleteAgentConfigProfile(profileId: string): void {
     const filtered = profiles.filter(p => p.id !== profileId);
     localStorage.setItem(AGENT_CONFIGS_KEY, JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error deleting agent config profile:', error);
+    logError('Failed to delete agent config profile', error);
   }
 }
 

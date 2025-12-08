@@ -3,6 +3,7 @@
  */
 
 import jwt from 'jsonwebtoken';
+import { warn } from './logger';
 
 const JWT_SECRET: string = process.env.JWT_SECRET || 'change-this-in-production-minimum-32-characters';
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '15m'; // Short-lived access tokens (15 minutes)
@@ -21,7 +22,7 @@ export interface JWTPayload {
  */
 export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
   if (!JWT_SECRET || JWT_SECRET === 'change-this-in-production-minimum-32-characters') {
-    console.warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
+    warn('⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET in environment variables for production!');
   }
   
   return jwt.sign(payload, JWT_SECRET, {

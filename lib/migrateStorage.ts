@@ -5,6 +5,7 @@
 
 import { apiPost } from './apiClient';
 import { getCurrentUserId } from './auth';
+import { error as logError } from './logger';
 
 export async function migrateLocalStorageToMongo(): Promise<{
   success: boolean;
@@ -36,7 +37,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
           }))
         );
       } catch (error) {
-        console.error('Error parsing custom responses:', error);
+        logError('Failed to parse custom responses', error);
       }
     }
 
@@ -46,7 +47,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.confidenceRatings = JSON.parse(ratings);
       } catch (error) {
-        console.error('Error parsing confidence ratings:', error);
+        logError('Failed to parse confidence ratings', error);
       }
     }
 
@@ -56,7 +57,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.practiceSessions = JSON.parse(sessions);
       } catch (error) {
-        console.error('Error parsing practice sessions:', error);
+        logError('Failed to parse practice sessions', error);
       }
     }
 
@@ -66,7 +67,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.notes = JSON.parse(notes);
       } catch (error) {
-        console.error('Error parsing notes:', error);
+        logError('Failed to parse notes', error);
       }
     }
 
@@ -76,7 +77,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.responseTemplates = JSON.parse(templates);
       } catch (error) {
-        console.error('Error parsing templates:', error);
+        logError('Failed to parse templates', error);
       }
     }
 
@@ -86,7 +87,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.practiceHistory = JSON.parse(history);
       } catch (error) {
-        console.error('Error parsing practice history:', error);
+        logError('Failed to parse practice history', error);
       }
     }
 
@@ -100,7 +101,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
           history: pointsData.history || [],
         };
       } catch (error) {
-        console.error('Error parsing points:', error);
+        logError('Failed to parse points', error);
       }
     }
 
@@ -110,7 +111,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.reviewSchedules = JSON.parse(reviewSchedules);
       } catch (error) {
-        console.error('Error parsing review schedules:', error);
+        logError('Failed to parse review schedules', error);
       }
     }
 
@@ -121,7 +122,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
         const paths = JSON.parse(learningPaths);
         migrationData.learningPathProgress = Array.isArray(paths) ? paths : [paths];
       } catch (error) {
-        console.error('Error parsing learning paths:', error);
+        logError('Failed to parse learning paths', error);
       }
     }
 
@@ -131,7 +132,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       try {
         migrationData.voiceSessions = JSON.parse(voiceSessions);
       } catch (error) {
-        console.error('Error parsing voice sessions:', error);
+        logError('Failed to parse voice sessions', error);
       }
     }
 
@@ -155,7 +156,7 @@ export async function migrateLocalStorageToMongo(): Promise<{
       migrated: result.migrated || {},
     };
   } catch (error: any) {
-    console.error('Migration error:', error);
+    logError('Migration failed', error);
     return {
       success: false,
       migrated: {},

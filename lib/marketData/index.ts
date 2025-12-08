@@ -5,6 +5,7 @@
 
 import { PropertyDetails, MarketData } from './types';
 import { getPropertyDataFromRapidAPI, isRapidAPIConfigured } from './rapidapi';
+import { error as logError } from '../logger';
 
 /**
  * Get market data for a property
@@ -25,7 +26,7 @@ export async function getPropertyData(
     const data = await getPropertyDataFromRapidAPI(address, propertyDetails);
     return data;
   } catch (error) {
-    console.error('Error fetching property data:', error);
+    logError('Failed to fetch property data', error);
     throw new Error('Failed to fetch property market data');
   }
 }

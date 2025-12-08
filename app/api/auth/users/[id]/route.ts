@@ -168,7 +168,7 @@ export async function DELETE(
     response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
     return response;
   } catch (error: any) {
-    console.error('Delete user error:', error);
+    logError('Failed to delete user', error);
     return NextResponse.json(
       { error: 'Failed to delete user' },
       { status: 500 }

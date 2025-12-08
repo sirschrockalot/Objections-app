@@ -4,6 +4,7 @@
 
 import { VoiceSession, ConversationMessage } from '@/types';
 import { getVoiceSessions } from './voiceSessionStorage';
+import { error as logError } from './logger';
 
 /**
  * Export a single voice session as JSON
@@ -201,7 +202,7 @@ export async function copySessionSummaryToClipboard(session: VoiceSession): Prom
     await navigator.clipboard.writeText(summary);
     return true;
   } catch (error) {
-    console.error('Error copying to clipboard:', error);
+    logError('Failed to copy to clipboard', error);
     return false;
   }
 }

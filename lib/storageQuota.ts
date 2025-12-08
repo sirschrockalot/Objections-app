@@ -3,6 +3,8 @@
  * Tracks localStorage and IndexedDB usage, provides warnings, and suggests cleanup
  */
 
+import { error as logError } from './logger';
+
 export interface StorageUsage {
   localStorage: {
     used: number; // bytes
@@ -73,7 +75,7 @@ export async function getIndexedDBUsage(): Promise<number> {
     const estimate = await navigator.storage.estimate();
     return estimate.usage || 0;
   } catch (error) {
-    console.error('Error getting IndexedDB usage:', error);
+    logError('Failed to get IndexedDB usage', error);
     return 0;
   }
 }
@@ -91,7 +93,7 @@ export async function getIndexedDBQuota(): Promise<number> {
     const estimate = await navigator.storage.estimate();
     return estimate.quota || 50 * 1024 * 1024; // Fallback to 50MB
   } catch (error) {
-    console.error('Error getting IndexedDB quota:', error);
+    logError('Failed to get IndexedDB quota', error);
     return 50 * 1024 * 1024; // Fallback to 50MB
   }
 }

@@ -6,6 +6,7 @@
 import { VoiceSession } from '@/types';
 import { apiGet, apiPost, apiDelete } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
+import { error as logError, warn } from './logger';
 
 const VOICE_SESSIONS_KEY = 'response-ready-voice-sessions';
 const ACTIVE_SESSION_KEY = 'response-ready-active-voice-session';
@@ -25,7 +26,7 @@ export async function saveVoiceSession(session: VoiceSession): Promise<void> {
       await apiPost('/api/data/voice-sessions', { session });
       return;
     } catch (error) {
-      console.error('Error saving voice session to API:', error);
+      logError('Failed to save voice session to API', error);
       // Fall through to localStorage
     }
   }
@@ -44,10 +45,10 @@ export async function saveVoiceSession(session: VoiceSession): Promise<void> {
     localStorage.setItem(VOICE_SESSIONS_KEY, JSON.stringify(sessions));
   } catch (error) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.error('Storage quota exceeded when saving voice session');
+      warn('Storage quota exceeded when saving voice session');
       throw new Error('Storage quota exceeded. Please free up space or export your data.');
     }
-    console.error('Error saving voice session:', error);
+    logError('Failed to save voice session', error);
     throw error;
   }
 }
@@ -63,7 +64,7 @@ export async function getVoiceSessions(): Promise<VoiceSession[]> {
       const data = await apiGet('/api/data/voice-sessions');
       return data.sessions || [];
     } catch (error) {
-      console.error('Error loading voice sessions from API:', error);
+      logError('Failed to load voice sessions from API', error);
       // Fall through
     }
   }
@@ -78,7 +79,7 @@ function getVoiceSessionsSync(): VoiceSession[] {
     if (!stored) return [];
     return JSON.parse(stored) as VoiceSession[];
   } catch (error) {
-    console.error('Error loading voice sessions:', error);
+    logError('Failed to load voice sessions', error);
     return [];
   }
 }
@@ -95,7 +96,7 @@ export async function getVoiceSession(sessionId: string): Promise<VoiceSession |
       }
       return null;
     } catch (error) {
-      console.error('Error getting voice session from API:', error);
+      logError('Failed to get voice session from API', error);
       // Fall through
     }
   }
@@ -115,7 +116,7 @@ export async function deleteVoiceSession(sessionId: string): Promise<void> {
       await apiDelete('/api/data/voice-sessions', { sessionId });
       return;
     } catch (error) {
-      console.error('Error deleting voice session via API:', error);
+      logError('Failed to delete voice session via API', error);
       // Fall through
     }
   }
@@ -126,7 +127,7 @@ export async function deleteVoiceSession(sessionId: string): Promise<void> {
     const filtered = sessions.filter((s) => s.id !== sessionId);
     localStorage.setItem(VOICE_SESSIONS_KEY, JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error deleting voice session:', error);
+    logError('Failed to delete voice session', error);
   }
 }
 
@@ -183,7 +184,7 @@ export function saveActiveSession(session: VoiceSession): void {
     };
     localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(sessionWithSaveTime));
   } catch (error) {
-    console.error('Error saving active session:', error);
+    logError('Failed to save active session', error);
   }
 }
 
@@ -198,7 +199,7 @@ export function getActiveSession(): VoiceSession | null {
     if (!stored) return null;
     return JSON.parse(stored) as VoiceSession;
   } catch (error) {
-    console.error('Error loading active session:', error);
+    logError('Failed to load active session', error);
     return null;
   }
 }

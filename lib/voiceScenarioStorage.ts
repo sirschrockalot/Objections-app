@@ -3,6 +3,7 @@
  */
 
 import { VoiceSession } from '@/types';
+import { error as logError } from './logger';
 
 const VOICE_SCENARIO_SESSIONS_KEY = 'response-ready-voice-scenario-sessions';
 
@@ -30,7 +31,7 @@ export function saveVoiceScenarioSession(session: VoiceScenarioSession): void {
 
     localStorage.setItem(VOICE_SCENARIO_SESSIONS_KEY, JSON.stringify(sessions));
   } catch (error) {
-    console.error('Error saving voice scenario session:', error);
+    logError('Failed to save voice scenario session', error);
   }
 }
 
@@ -45,7 +46,7 @@ export function getVoiceScenarioSessions(): VoiceScenarioSession[] {
     if (!stored) return [];
     return JSON.parse(stored) as VoiceScenarioSession[];
   } catch (error) {
-    console.error('Error loading voice scenario sessions:', error);
+    logError('Failed to load voice scenario sessions', error);
     return [];
   }
 }

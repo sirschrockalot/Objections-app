@@ -1,5 +1,6 @@
 import { ObjectionOfTheDay } from '@/types';
 import { getObjections } from './storage';
+import { error as logError } from './logger';
 
 const OBJECTION_OF_THE_DAY_KEY = 'objections-app-objection-of-day';
 
@@ -43,7 +44,7 @@ export async function getObjectionOfTheDay(): Promise<ObjectionOfTheDay | null> 
     localStorage.setItem(OBJECTION_OF_THE_DAY_KEY, JSON.stringify(objectionOfDay));
     return objectionOfDay;
   } catch (error) {
-    console.error('Error getting objection of the day:', error);
+    logError('Failed to get objection of the day', error);
     return null;
   }
 }
@@ -156,7 +157,7 @@ export function markTipAsSeen(tipId: string): void {
 
     localStorage.setItem('objections-app-seen-tips', JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error marking tip as seen:', error);
+    logError('Failed to mark tip as seen', error);
   }
 }
 

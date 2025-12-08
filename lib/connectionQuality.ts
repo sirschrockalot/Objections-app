@@ -2,6 +2,8 @@
  * Connection quality monitoring utilities
  */
 
+import { error as logError } from './logger';
+
 export interface ConnectionQuality {
   latency: number; // milliseconds
   quality: 'excellent' | 'good' | 'fair' | 'poor';
@@ -117,7 +119,7 @@ export function createConnectionQualityMonitor(
         quality,
       });
     } catch (error) {
-      console.error('Error measuring connection quality:', error);
+      logError('Failed to measure connection quality', error);
       onQualityUpdate({
         latency: -1,
         quality: 'poor',

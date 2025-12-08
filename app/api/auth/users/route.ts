@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
     return response;
   } catch (error: any) {
-    console.error('Create user error:', error);
+    logError('Failed to create user', error);
     if (error.code === 11000) {
       return NextResponse.json(
         { error: 'User with this email already exists' },

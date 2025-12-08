@@ -8,6 +8,7 @@ import {
   ConversationMessage,
   VoiceSession,
 } from '@/types';
+import { debug, warn, error as logError } from './logger';
 
 export interface ElevenLabsEvent {
   type: string;
@@ -40,7 +41,7 @@ export class ElevenLabsClient {
       process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '';
     
     if (!this.apiKey) {
-      console.warn('ElevenLabs API key not found. Voice agent will not work.');
+      warn('ElevenLabs API key not found. Voice agent will not work.');
     }
 
     // Store scenario context if provided
@@ -69,7 +70,7 @@ export class ElevenLabsClient {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log('ElevenLabs WebSocket connected');
+          debug('ElevenLabs WebSocket connected');
           this.reconnectAttempts = 0;
           this.onStatusChange?.('connected');
 
@@ -109,14 +110,14 @@ export class ElevenLabsClient {
         };
 
         this.ws.onerror = (error) => {
-          console.error('ElevenLabs WebSocket error:', error);
+          logError('ElevenLabs WebSocket error', error);
           this.onStatusChange?.('error');
           this.onError?.(new Error('WebSocket connection error'));
           reject(error);
         };
 
         this.ws.onclose = (event) => {
-          console.log('ElevenLabs WebSocket closed', event.code, event.reason);
+          debug('ElevenLabs WebSocket closed', { code: event.code, reason: event.reason });
           this.onStatusChange?.('disconnected');
 
           // Notify about disconnection for session recovery
@@ -128,9 +129,9 @@ export class ElevenLabsClient {
           if (!this.isIntentionallyClosed && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-            console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+            debug(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
             setTimeout(() => {
-              this.connect().catch(console.error);
+              this.connect().catch((err) => logError('Failed to reconnect WebSocket', err));
             }, delay);
           } else if (!this.isIntentionallyClosed && this.reconnectAttempts >= this.maxReconnectAttempts) {
             // Max reconnection attempts reached
@@ -157,7 +158,7 @@ export class ElevenLabsClient {
         const data = JSON.parse(event.data);
         this.handleEvent(data);
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        logError('Failed to parse WebSocket message', error);
       }
     }
   }
@@ -168,7 +169,7 @@ export class ElevenLabsClient {
   private handleEvent(event: ElevenLabsEvent): void {
     switch (event.type) {
       case 'conversation_initiation_metadata':
-        console.log('Conversation initialized:', event.data);
+        debug('Conversation initialized', event.data);
         break;
 
       case 'agent_response':
@@ -204,12 +205,12 @@ export class ElevenLabsClient {
         break;
 
       case 'error':
-        console.error('ElevenLabs error:', event.data);
+        logError('ElevenLabs error', undefined, { data: event.data });
         this.onError?.(new Error(event.data?.message || 'Unknown error'));
         break;
 
       default:
-        console.log('Unhandled event type:', event.type, event.data);
+        debug('Unhandled event type', { type: event.type, data: event.data });
     }
   }
 
@@ -220,7 +221,7 @@ export class ElevenLabsClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(audioBlob);
     } else {
-      console.warn('WebSocket not connected. Cannot send audio.');
+      warn('WebSocket not connected. Cannot send audio.');
     }
   }
 
@@ -234,7 +235,7 @@ export class ElevenLabsClient {
         text,
       });
     } else {
-      console.warn('WebSocket not connected. Cannot send text.');
+      warn('WebSocket not connected. Cannot send text.');
     }
   }
 

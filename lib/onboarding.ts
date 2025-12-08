@@ -3,6 +3,8 @@
  * Tracks user progress through onboarding steps and tutorials
  */
 
+import { error as logError } from './logger';
+
 export interface OnboardingStep {
   id: string;
   title: string;
@@ -46,7 +48,7 @@ export function getOnboardingProgress(): OnboardingProgress {
       return JSON.parse(stored) as OnboardingProgress;
     }
   } catch (error) {
-    console.error('Error loading onboarding progress:', error);
+    logError('Failed to load onboarding progress', error);
   }
 
   return {
@@ -67,7 +69,7 @@ export function saveOnboardingProgress(progress: OnboardingProgress): void {
     progress.lastUpdated = new Date().toISOString();
     localStorage.setItem(ONBOARDING_KEY, JSON.stringify(progress));
   } catch (error) {
-    console.error('Error saving onboarding progress:', error);
+    logError('Failed to save onboarding progress', error);
   }
 }
 

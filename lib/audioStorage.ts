@@ -4,6 +4,7 @@
  */
 
 import { SessionAudioRecording } from '@/types';
+import { error as logError } from './logger';
 
 const DB_NAME = 'ResponseReadyAudioDB';
 const DB_VERSION = 1;
@@ -76,7 +77,7 @@ export async function saveAudioRecording(recording: SessionAudioRecording): Prom
       };
     });
   } catch (error) {
-    console.error('Error saving audio recording:', error);
+    logError('Failed to save audio recording', error);
     throw error;
   }
 }
@@ -100,7 +101,7 @@ export async function getAudioRecording(sessionId: string): Promise<SessionAudio
       };
     });
   } catch (error) {
-    console.error('Error getting audio recording:', error);
+    logError('Failed to get audio recording', error);
     return null;
   }
 }
@@ -128,7 +129,7 @@ export async function deleteAudioRecording(sessionId: string): Promise<void> {
       request.onerror = () => reject(new Error('Failed to delete audio recording'));
     });
   } catch (error) {
-    console.error('Error deleting audio recording:', error);
+    logError('Failed to delete audio recording', error);
     throw error;
   }
 }
@@ -152,7 +153,7 @@ export async function getAllAudioRecordingIds(): Promise<string[]> {
       };
     });
   } catch (error) {
-    console.error('Error getting audio recording IDs:', error);
+    logError('Failed to get audio recording IDs', error);
     return [];
   }
 }
@@ -172,7 +173,7 @@ export async function getStorageUsage(): Promise<{ used: number; available: numb
       available: estimate.quota || 0,
     };
   } catch (error) {
-    console.error('Error getting storage estimate:', error);
+    logError('Failed to get storage estimate', error);
     return { used: 0, available: 0 };
   }
 }

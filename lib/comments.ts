@@ -1,4 +1,5 @@
 import { Comment } from '@/types';
+import { error as logError } from './logger';
 
 const COMMENTS_KEY = 'objections-app-comments';
 
@@ -25,7 +26,7 @@ export function getComments(responseId: string, objectionId: string): Comment[] 
       c => c.responseId === responseId && c.objectionId === objectionId
     );
   } catch (error) {
-    console.error('Error loading comments:', error);
+    logError('Failed to load comments', error);
     return [];
   }
 }
@@ -40,7 +41,7 @@ export function getAllCommentsForObjection(objectionId: string): Comment[] {
     const allComments: Comment[] = JSON.parse(stored);
     return allComments.filter(c => c.objectionId === objectionId);
   } catch (error) {
-    console.error('Error loading comments:', error);
+    logError('Failed to load comments', error);
     return [];
   }
 }
@@ -71,7 +72,7 @@ export function addComment(responseId: string, objectionId: string, text: string
 
     return newComment;
   } catch (error) {
-    console.error('Error adding comment:', error);
+    logError('Failed to add comment', error);
     throw error;
   }
 }
@@ -103,7 +104,7 @@ export function updateComment(commentId: string, text: string): Comment | null {
     localStorage.setItem(COMMENTS_KEY, JSON.stringify(allComments));
     return allComments[commentIndex];
   } catch (error) {
-    console.error('Error updating comment:', error);
+    logError('Failed to update comment', error);
     throw error;
   }
 }
@@ -138,7 +139,7 @@ export function deleteComment(commentId: string): boolean {
 
     return true;
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    logError('Failed to delete comment', error);
     throw error;
   }
 }

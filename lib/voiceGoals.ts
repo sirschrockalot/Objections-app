@@ -5,6 +5,7 @@
 import { VoicePracticeGoal, GoalProgress, VoiceSession } from '@/types';
 import { getVoiceSessions, getVoiceSessionStats } from './voiceSessionStorage';
 import { getSessionFeedback } from './aiFeedback';
+import { error as logError } from './logger';
 
 const VOICE_GOALS_KEY = 'response-ready-voice-goals';
 
@@ -19,7 +20,7 @@ export function getVoiceGoals(): VoicePracticeGoal[] {
     if (!stored) return [];
     return JSON.parse(stored) as VoicePracticeGoal[];
   } catch (error) {
-    console.error('Error loading voice goals:', error);
+    logError('Failed to load voice goals', error);
     return [];
   }
 }
@@ -49,7 +50,7 @@ export function saveVoiceGoal(goal: VoicePracticeGoal): void {
 
     localStorage.setItem(VOICE_GOALS_KEY, JSON.stringify(goals));
   } catch (error) {
-    console.error('Error saving voice goal:', error);
+    logError('Failed to save voice goal', error);
   }
 }
 
@@ -64,7 +65,7 @@ export function deleteVoiceGoal(goalId: string): void {
     const filtered = goals.filter((g) => g.id !== goalId);
     localStorage.setItem(VOICE_GOALS_KEY, JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error deleting voice goal:', error);
+    logError('Failed to delete voice goal', error);
   }
 }
 
