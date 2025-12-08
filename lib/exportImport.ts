@@ -1,7 +1,21 @@
 import { Objection, Response, PracticeSession, ConfidenceRating, ObjectionNote, ResponseTemplate, PracticeHistoryEntry, Comment } from '@/types';
-import { getObjections, getConfidenceRatings, getPracticeSessions, getNotes, getPracticeHistory, getTemplates } from './storage';
+import { 
+  getObjections, 
+  getConfidenceRatings, 
+  getPracticeSessions, 
+  getNotes, 
+  getPracticeHistory, 
+  getTemplates,
+  saveCustomResponse,
+  saveConfidenceRating,
+  savePracticeSession,
+  saveNote,
+  saveTemplate,
+  recordPracticeHistory
+} from './storage';
 import { getTotalPoints, getPointsHistory } from './gamification';
-import { getAllReviewSchedules } from './spacedRepetition';
+import { getAllReviewSchedules, saveReviewSchedule } from './spacedRepetition';
+import { addComment } from './comments';
 
 export interface ExportData {
   version: string;
@@ -249,7 +263,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import custom responses
     if (options.importCustomResponses !== false && jsonData.customResponses) {
-      const { saveCustomResponse } = require('./storage');
       jsonData.customResponses.forEach(({ objectionId, response }) => {
         try {
           saveCustomResponse(objectionId, response);
@@ -262,7 +275,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import confidence ratings
     if (options.importRatings !== false && jsonData.confidenceRatings) {
-      const { saveConfidenceRating } = require('./storage');
       jsonData.confidenceRatings.forEach(rating => {
         try {
           saveConfidenceRating(rating.objectionId, rating.rating);
@@ -275,7 +287,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import practice sessions
     if (options.importSessions !== false && jsonData.practiceSessions) {
-      const { savePracticeSession } = require('./storage');
       jsonData.practiceSessions.forEach(session => {
         try {
           savePracticeSession(session);
@@ -288,7 +299,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import notes
     if (options.importNotes !== false && jsonData.notes) {
-      const { saveNote } = require('./storage');
       jsonData.notes.forEach(note => {
         try {
           saveNote(note.objectionId, note.note);
@@ -301,7 +311,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import response templates
     if (options.importTemplates !== false && jsonData.responseTemplates) {
-      const { saveTemplate } = require('./storage');
       jsonData.responseTemplates.forEach(template => {
         try {
           saveTemplate(template);
@@ -314,7 +323,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import comments
     if (options.importComments !== false && jsonData.comments) {
-      const { addComment } = require('./comments');
       jsonData.comments.forEach(comment => {
         try {
           addComment(comment.responseId, comment.objectionId, comment.text, comment.parentId);
@@ -327,7 +335,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import practice history
     if (options.importPracticeHistory !== false && jsonData.practiceHistory) {
-      const { recordPracticeHistory } = require('./storage');
       jsonData.practiceHistory.forEach(entry => {
         try {
           recordPracticeHistory(entry.objectionId, entry.sessionId, entry.confidenceRating);
@@ -341,7 +348,6 @@ export function importData(jsonData: ExportData, options: {
 
     // Import review schedules
     if (options.importReviewSchedules !== false && jsonData.reviewSchedules) {
-      const { saveReviewSchedule } = require('./spacedRepetition');
       jsonData.reviewSchedules.forEach(schedule => {
         try {
           saveReviewSchedule(schedule);

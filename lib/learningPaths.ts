@@ -1,7 +1,8 @@
 import { LearningPathProgress, DailyChallenge } from '@/types';
 import { apiGet, apiPost } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
-import { getObjections } from './storage';
+import { getObjections, getObjectionsSync } from './storage';
+import { getLearningPathById, getAllLearningPaths } from '@/data/learningPaths';
 
 const LEARNING_PATH_PROGRESS_KEY = 'objections-app-learning-path-progress';
 const DAILY_CHALLENGES_KEY = 'objections-app-daily-challenges';
@@ -129,7 +130,6 @@ export async function completePathStep(pathId: string, objectionId: string): Pro
   progress.completedSteps.add(objectionId);
   progress.lastPracticedAt = new Date().toISOString();
   
-  const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (path) {
     const nextIndex = path.objections.findIndex(
@@ -152,7 +152,6 @@ export async function getCurrentPathObjection(pathId: string): Promise<string | 
   const progress = await getPathProgress(pathId);
   if (!progress) return null;
 
-  const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (!path) return null;
 
@@ -166,7 +165,6 @@ export async function isPathCompleted(pathId: string): Promise<boolean> {
   const progress = await getPathProgress(pathId);
   if (!progress) return false;
 
-  const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (!path) return false;
 
@@ -180,7 +178,6 @@ export async function getPathCompletionPercentage(pathId: string): Promise<numbe
   const progress = await getPathProgress(pathId);
   if (!progress) return 0;
 
-  const { getLearningPathById } = require('@/data/learningPaths');
   const path = getLearningPathById(pathId);
   if (!path) return 0;
 
@@ -284,7 +281,6 @@ export async function getCompletedPaths(): Promise<string[]> {
   if (shouldUseAPI()) {
     try {
       const data = await apiGet('/api/data/learning-paths');
-      const { getAllLearningPaths } = require('@/data/learningPaths');
       const allPaths = getAllLearningPaths();
 
       return (data.progress || [])
@@ -307,7 +303,6 @@ export async function getCompletedPaths(): Promise<string[]> {
     if (!stored) return [];
 
     const allProgress: LearningPathProgress[] = JSON.parse(stored);
-    const { getAllLearningPaths } = require('@/data/learningPaths');
     const allPaths = getAllLearningPaths();
 
     return allProgress
@@ -324,8 +319,4 @@ export async function getCompletedPaths(): Promise<string[]> {
   }
 }
 
-// Helper function for getDailyChallenge
-function getObjectionsSync() {
-  const { getObjectionsSync } = require('@/lib/storage');
-  return getObjectionsSync();
-}
+// Helper function for getDailyChallenge - uses imported getObjectionsSync

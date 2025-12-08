@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { LearningPath, LearningPathProgress } from '@/types';
-import { getAllLearningPaths, getBeginnerPath, getCategoryMasteryPaths, hasCompletedPrerequisites } from '@/data/learningPaths';
+import { getAllLearningPaths, getBeginnerPath, getCategoryMasteryPaths, hasCompletedPrerequisites, getLearningPathById } from '@/data/learningPaths';
 import {
   getPathProgress,
   startLearningPath,
@@ -88,7 +88,6 @@ export default function LearningPaths({ onSelectObjection, onStartPath }: Learni
   };
 
   const handlePracticeCurrent = async (pathId: string) => {
-    const { getLearningPathById } = require('@/data/learningPaths');
     const path = getLearningPathById(pathId);
     const progress = await getPathProgress(pathId);
     
