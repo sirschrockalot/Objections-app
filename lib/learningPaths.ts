@@ -3,6 +3,7 @@ import { apiGet, apiPost } from './apiClient';
 import { getCurrentUserId, isAuthenticated } from './auth';
 import { getObjections, getObjectionsSync } from './storage';
 import { getLearningPathById, getAllLearningPaths } from '@/data/learningPaths';
+import { error as logError } from './logger';
 
 const LEARNING_PATH_PROGRESS_KEY = 'objections-app-learning-path-progress';
 const DAILY_CHALLENGES_KEY = 'objections-app-daily-challenges';
@@ -49,7 +50,7 @@ export async function getPathProgress(pathId: string): Promise<LearningPathProgr
       completedSteps: new Set(progress.completedSteps as any),
     };
   } catch (error) {
-    console.error('Error getting path progress:', error);
+    logError('Failed to get path progress', error);
     return null;
   }
 }
@@ -94,7 +95,7 @@ export async function savePathProgress(progress: LearningPathProgress): Promise<
 
     localStorage.setItem(LEARNING_PATH_PROGRESS_KEY, JSON.stringify(allProgress));
   } catch (error) {
-    console.error('Error saving path progress:', error);
+    logError('Failed to save path progress', error);
   }
 }
 
@@ -251,7 +252,7 @@ export function completeDailyChallenge(): void {
       localStorage.setItem(DAILY_CHALLENGES_KEY, JSON.stringify(challenges));
     }
   } catch (error) {
-    console.error('Error completing daily challenge:', error);
+    logError('Failed to complete daily challenge', error);
   }
 }
 
@@ -314,7 +315,7 @@ export async function getCompletedPaths(): Promise<string[]> {
       })
       .map((progress: LearningPathProgress) => progress.pathId);
   } catch (error) {
-    console.error('Error getting completed paths:', error);
+    logError('Failed to get completed paths', error);
     return [];
   }
 }

@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
         response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
         return response;
       } catch (aiError) {
-        console.error('AI analysis error:', aiError);
+        logError('AI analysis failed', aiError);
         // Fall through to basic analysis
       }
     }

@@ -8,6 +8,7 @@ import NodeCache from 'node-cache';
 import connectDB from '@/lib/mongodb';
 import mongoose, { Schema, Model } from 'mongoose';
 import crypto from 'crypto';
+import { error as logError } from '../logger';
 
 // In-memory cache with TTL support (primary cache)
 const memoryCache = new NodeCache({
@@ -114,7 +115,7 @@ export async function getCachedAIResponse<T>(
     
     return cached.response as T;
   } catch (error) {
-    console.error('Error reading AI cache from MongoDB:', error);
+    logError('Failed to read AI cache from MongoDB', error);
     return null;
   }
 }
@@ -151,7 +152,7 @@ export async function cacheAIResponse<T>(
       { upsert: true, new: true }
     );
   } catch (error) {
-    console.error('Error caching AI response to MongoDB:', error);
+    logError('Failed to cache AI response to MongoDB', error);
     // Don't throw - MongoDB caching failures shouldn't break the app
     // In-memory cache is still working
   }
@@ -184,7 +185,7 @@ export async function clearAICache(
       await AICache.deleteMany({});
     }
   } catch (error) {
-    console.error('Error clearing AI cache from MongoDB:', error);
+    logError('Failed to clear AI cache from MongoDB', error);
   }
 }
 
@@ -224,7 +225,7 @@ export async function getAICacheStats(): Promise<{
       newestEntry: newest?.createdAt || null,
     };
   } catch (error) {
-    console.error('Error getting cache stats:', error);
+    logError('Failed to get AI cache stats', error);
     return {
       totalEntries: 0,
       entriesByTask: {},

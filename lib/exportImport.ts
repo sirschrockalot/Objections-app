@@ -1,4 +1,5 @@
 import { Objection, Response, PracticeSession, ConfidenceRating, ObjectionNote, ResponseTemplate, PracticeHistoryEntry, Comment } from '@/types';
+import { error as logError } from './logger';
 import { 
   getObjections, 
   getConfidenceRatings, 
@@ -44,7 +45,7 @@ function getAllComments(): Comment[] {
     const stored = localStorage.getItem('objections-app-comments');
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading all comments:', error);
+    logError('Failed to load all comments', error);
     return [];
   }
 }

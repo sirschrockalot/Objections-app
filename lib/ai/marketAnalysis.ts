@@ -7,6 +7,7 @@ import { PropertyDetails, ComparableProperty, MarketData } from '@/lib/marketDat
 import { getCachedAIResponse, cacheAIResponse } from '@/lib/cache/aiCache';
 import { trackAPICost, calculateOpenAICost } from '@/lib/costTracking';
 import { deduplicateRequest } from '@/lib/utils/requestDeduplication';
+import { error as logError } from '../logger';
 
 export interface CompAnalysis {
   ranking: Array<{
@@ -110,7 +111,7 @@ Return JSON:
 
       if (!response.ok) {
         const error = await response.json();
-        console.error('OpenAI API error:', error);
+        logError('OpenAI API error in comp analysis', error);
         // Fallback to basic analysis
         return getBasicCompAnalysis(potentialComps);
       }
@@ -131,7 +132,7 @@ Return JSON:
           inputTokens: usage.prompt_tokens,
           outputTokens: usage.completion_tokens,
           task: 'market-analysis',
-        }).catch(console.error);
+        }).catch((err) => logError('Failed to track API cost', err));
       }
 
       const analysis = JSON.parse(content);
@@ -157,7 +158,7 @@ Return JSON:
 
       return result;
     } catch (error) {
-      console.error('Error analyzing comps with AI:', error);
+      logError('Failed to analyze comps with AI', error);
       // Fallback to basic analysis
       return getBasicCompAnalysis(potentialComps);
     }
@@ -248,7 +249,7 @@ Return JSON:
           inputTokens: usage.prompt_tokens,
           outputTokens: usage.completion_tokens,
           task: 'market-trends',
-        }).catch(console.error);
+        }).catch((err) => logError('Failed to track API cost', err));
       }
 
       const trends = JSON.parse(content);
@@ -268,7 +269,7 @@ Return JSON:
 
       return result;
     } catch (error) {
-      console.error('Error analyzing market trends:', error);
+      logError('Failed to analyze market trends', error);
       return getBasicMarketTrends(comps);
     }
   });

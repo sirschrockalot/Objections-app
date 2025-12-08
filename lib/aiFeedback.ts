@@ -6,6 +6,7 @@
 import { VoiceSession, ConversationMessage, AIFeedback, QualityMetrics, AIRecommendation, ResponseAnalysis } from '@/types';
 import { getObjections } from './storage';
 import { deduplicateRequest } from '@/lib/utils/requestDeduplication';
+import { error as logError } from './logger';
 
 // Server-only imports - only import on server side
 let getCachedAIResponse: any = null;
@@ -55,7 +56,7 @@ function getCachedFeedback(sessionId: string): AIFeedback | null {
 
     return entry.feedback;
   } catch (error) {
-    console.error('Error reading feedback cache:', error);
+    logError('Failed to read feedback cache', error);
     return null;
   }
 }
@@ -77,7 +78,7 @@ function cacheFeedback(sessionId: string, feedback: AIFeedback): void {
 
     localStorage.setItem(AI_FEEDBACK_CACHE_KEY, JSON.stringify(cache));
   } catch (error) {
-    console.error('Error caching feedback:', error);
+    logError('Failed to cache feedback', error);
   }
 }
 
@@ -226,7 +227,7 @@ Return JSON:
 
       return feedback;
     } catch (error) {
-      console.error('Error analyzing session with AI:', error);
+      logError('AI session analysis failed', error, { sessionId: session.id });
       throw error;
     }
   });
@@ -244,7 +245,7 @@ export async function getSessionFeedback(session: VoiceSession, forceRefresh = f
   try {
     return await analyzeSessionWithAI(session);
   } catch (error) {
-    console.error('Failed to get AI feedback:', error);
+    logError('Failed to get AI feedback', error, { sessionId: session.id });
     return null;
   }
 }

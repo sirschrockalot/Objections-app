@@ -8,6 +8,7 @@ import NodeCache from 'node-cache';
 import connectDB from '@/lib/mongodb';
 import mongoose, { Schema, Model } from 'mongoose';
 import crypto from 'crypto';
+import { error as logError } from '../logger';
 
 // In-memory cache with TTL support (primary cache)
 const memoryCache = new NodeCache({
@@ -114,7 +115,7 @@ export async function getCachedQuery<T>(
     
     return cached.result as T;
   } catch (error) {
-    console.error('Error reading query cache from MongoDB:', error);
+    logError('Failed to read query cache from MongoDB', error);
     return null;
   }
 }
@@ -151,7 +152,7 @@ export async function cacheQueryResult<T>(
       { upsert: true, new: true }
     );
   } catch (error) {
-    console.error('Error caching query result to MongoDB:', error);
+    logError('Failed to cache query result to MongoDB', error);
     // Don't throw - MongoDB caching failures shouldn't break the app
     // In-memory cache is still working
   }
@@ -182,7 +183,7 @@ export async function clearQueryCache(model?: string): Promise<void> {
       await QueryCache.deleteMany({});
     }
   } catch (error) {
-    console.error('Error clearing query cache from MongoDB:', error);
+    logError('Failed to clear query cache from MongoDB', error);
   }
 }
 

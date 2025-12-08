@@ -125,7 +125,7 @@ export async function getObjections(): Promise<Objection[]> {
       personalNote: notesMap.get(obj.id),
     }));
   } catch (error) {
-    console.error('Error loading objections:', error);
+    logError('Failed to load objections', error);
     return initialObjections;
   }
 }
@@ -153,7 +153,7 @@ export function getObjectionsSync(): Objection[] {
       });
     }
   } catch (error) {
-    console.error('Error loading objections:', error);
+    logError('Failed to load objections from localStorage', error);
   }
 
   return initialObjections;
@@ -171,7 +171,7 @@ export async function saveCustomResponse(objectionId: string, response: Response
       await apiPost('/api/data/custom-responses', { objectionId, response });
       return;
     } catch (error) {
-      console.error('Error saving custom response to API:', error);
+      logError('Failed to save custom response to API', error);
       // Fall through to localStorage fallback
     }
   }
@@ -197,7 +197,7 @@ export async function saveCustomResponse(objectionId: string, response: Response
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(objections));
   } catch (error) {
-    console.error('Error saving custom response:', error);
+    logError('Failed to save custom response', error);
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       throw error;
     }
@@ -212,7 +212,7 @@ export async function upvoteResponse(objectionId: string, responseId: string): P
       await apiPut('/api/data/custom-responses', { objectionId, responseId });
       return;
     } catch (error) {
-      console.error('Error upvoting response via API:', error);
+      logError('Failed to upvote response via API', error);
       // Fall through to localStorage
     }
   }
@@ -245,7 +245,7 @@ export async function upvoteResponse(objectionId: string, responseId: string): P
       }
     }
   } catch (error) {
-    console.error('Error upvoting response:', error);
+    logError('Failed to upvote response', error);
   }
 }
 
@@ -268,7 +268,7 @@ export function isResponseUpvoted(objectionId: string, responseId: string): bool
       }
     }
   } catch (error) {
-    console.error('Error checking upvote status:', error);
+    logError('Failed to check upvote status', error);
   }
 
   return false;
@@ -287,7 +287,7 @@ export async function saveConfidenceRating(objectionId: string, rating: number):
       await apiPost('/api/data/confidence-ratings', { objectionId, rating });
       return;
     } catch (error) {
-      console.error('Error saving confidence rating to API:', error);
+      logError('Failed to save confidence rating to API', error);
       // Fall through
     }
   }
@@ -304,7 +304,7 @@ export async function saveConfidenceRating(objectionId: string, rating: number):
     localStorage.setItem(CONFIDENCE_RATINGS_KEY, JSON.stringify(ratings));
     invalidateStatsCache(); // Invalidate cache when rating is saved
   } catch (error) {
-    console.error('Error saving confidence rating:', error);
+    logError('Failed to save confidence rating', error);
   }
 }
 
@@ -316,7 +316,7 @@ export async function getConfidenceRatings(): Promise<ConfidenceRating[]> {
       const data = await apiGet('/api/data/confidence-ratings');
       return data.ratings || [];
     } catch (error) {
-      console.error('Error loading confidence ratings from API:', error);
+      logError('Failed to load confidence ratings from API', error);
       // Fall through
     }
   }
@@ -330,7 +330,7 @@ export function getConfidenceRatingsSync(): ConfidenceRating[] {
     const stored = localStorage.getItem(CONFIDENCE_RATINGS_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading confidence ratings:', error);
+    logError('Failed to load confidence ratings', error);
     return [];
   }
 }
@@ -395,7 +395,7 @@ export async function savePracticeSession(session: PracticeSession): Promise<voi
       invalidateStatsCache(); // Invalidate cache when new session is saved
       return;
     } catch (error) {
-      console.error('Error saving practice session to API:', error);
+      logError('Failed to save practice session to API', error);
       // Fall through
     }
   }
@@ -407,7 +407,7 @@ export async function savePracticeSession(session: PracticeSession): Promise<voi
     localStorage.setItem(PRACTICE_SESSIONS_KEY, JSON.stringify(sessions));
     invalidateStatsCache(); // Invalidate cache when new session is saved
   } catch (error) {
-    console.error('Error saving practice session:', error);
+    logError('Failed to save practice session', error);
   }
 }
 
@@ -419,7 +419,7 @@ export async function getPracticeSessions(): Promise<PracticeSession[]> {
       const data = await apiGet('/api/data/practice-sessions');
       return data.sessions || [];
     } catch (error) {
-      console.error('Error loading practice sessions from API:', error);
+      logError('Failed to load practice sessions from API', error);
       // Fall through
     }
   }
@@ -433,7 +433,7 @@ export function getPracticeSessionsSync(): PracticeSession[] {
     const stored = localStorage.getItem(PRACTICE_SESSIONS_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading practice sessions:', error);
+    logError('Failed to load practice sessions', error);
     return [];
   }
 }
@@ -514,7 +514,7 @@ export async function getAllStats(): Promise<{
       cacheTimestamp = Date.now();
       return data;
     } catch (error) {
-      console.error('Error loading stats from API:', error);
+      logError('Failed to load stats from API', error);
       // Fall through to individual calls
     }
   }
@@ -680,7 +680,7 @@ export async function saveNote(objectionId: string, note: string): Promise<void>
       await apiPost('/api/data/notes', { objectionId, note });
       return;
     } catch (error) {
-      console.error('Error saving note to API:', error);
+      logError('Failed to save note to API', error);
       // Fall through
     }
   }
@@ -705,7 +705,7 @@ export async function saveNote(objectionId: string, note: string): Promise<void>
 
     localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
   } catch (error) {
-    console.error('Error saving note:', error);
+    logError('Failed to save note', error);
   }
 }
 
@@ -717,7 +717,7 @@ export async function getNotes(): Promise<ObjectionNote[]> {
       const data = await apiGet('/api/data/notes');
       return data.notes || [];
     } catch (error) {
-      console.error('Error loading notes from API:', error);
+      logError('Failed to load notes from API', error);
       // Fall through
     }
   }
@@ -731,7 +731,7 @@ export function getNotesSync(): ObjectionNote[] {
     const stored = localStorage.getItem(NOTES_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading notes:', error);
+    logError('Failed to load notes', error);
     return [];
   }
 }
@@ -750,7 +750,7 @@ export async function deleteNote(objectionId: string): Promise<void> {
       await apiDelete('/api/data/notes', { objectionId });
       return;
     } catch (error) {
-      console.error('Error deleting note via API:', error);
+      logError('Failed to delete note via API', error);
       // Fall through
     }
   }
@@ -761,7 +761,7 @@ export async function deleteNote(objectionId: string): Promise<void> {
     const filtered = notes.filter(n => n.objectionId !== objectionId);
     localStorage.setItem(NOTES_KEY, JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error deleting note:', error);
+    logError('Failed to delete note', error);
   }
 }
 
@@ -774,7 +774,7 @@ export async function saveTemplate(template: ResponseTemplate): Promise<void> {
       await apiPost('/api/data/templates', { template });
       return;
     } catch (error) {
-      console.error('Error saving template to API:', error);
+      logError('Failed to save template to API', error);
       // Fall through
     }
   }
@@ -792,7 +792,7 @@ export async function saveTemplate(template: ResponseTemplate): Promise<void> {
 
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
   } catch (error) {
-    console.error('Error saving template:', error);
+    logError('Failed to save template', error);
   }
 }
 
@@ -804,7 +804,7 @@ export async function getTemplates(): Promise<ResponseTemplate[]> {
       const data = await apiGet('/api/data/templates');
       return data.templates || [];
     } catch (error) {
-      console.error('Error loading templates from API:', error);
+      logError('Failed to load templates from API', error);
       // Fall through
     }
   }
@@ -818,7 +818,7 @@ export function getTemplatesSync(): ResponseTemplate[] {
     const stored = localStorage.getItem(TEMPLATES_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading templates:', error);
+    logError('Failed to load templates', error);
     return [];
   }
 }
@@ -831,7 +831,7 @@ export async function deleteTemplate(templateId: string): Promise<void> {
       await apiDelete('/api/data/templates', { templateId });
       return;
     } catch (error) {
-      console.error('Error deleting template via API:', error);
+      logError('Failed to delete template via API', error);
       // Fall through
     }
   }
@@ -842,7 +842,7 @@ export async function deleteTemplate(templateId: string): Promise<void> {
     const filtered = templates.filter(t => t.id !== templateId);
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(filtered));
   } catch (error) {
-    console.error('Error deleting template:', error);
+    logError('Failed to delete template', error);
   }
 }
 
@@ -867,7 +867,7 @@ export async function recordPracticeHistory(objectionId: string, sessionId: stri
       await apiPost('/api/data/practice-history', { objectionId, sessionId, confidenceRating });
       return;
     } catch (error) {
-      console.error('Error recording practice history to API:', error);
+      logError('Failed to record practice history to API', error);
       // Fall through
     }
   }
@@ -900,7 +900,7 @@ export async function recordPracticeHistory(objectionId: string, sessionId: stri
 
     localStorage.setItem(PRACTICE_HISTORY_KEY, JSON.stringify(history));
   } catch (error) {
-    console.error('Error recording practice history:', error);
+    logError('Failed to record practice history', error);
   }
 }
 
@@ -912,7 +912,7 @@ export async function getPracticeHistory(): Promise<PracticeHistoryEntry[]> {
       const data = await apiGet('/api/data/practice-history');
       return data.history || [];
     } catch (error) {
-      console.error('Error loading practice history from API:', error);
+      logError('Failed to load practice history from API', error);
       // Fall through
     }
   }
@@ -926,7 +926,7 @@ export function getPracticeHistorySync(): PracticeHistoryEntry[] {
     const stored = localStorage.getItem(PRACTICE_HISTORY_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Error loading practice history:', error);
+    logError('Failed to load practice history', error);
     return [];
   }
 }

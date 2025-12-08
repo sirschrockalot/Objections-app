@@ -3,6 +3,8 @@
  * MongoDB-backed authentication using API routes
  */
 
+import { error as logError } from './logger';
+
 export interface User {
   id: string;
   username: string;
@@ -143,7 +145,7 @@ export async function authenticateUser(
 
     return data.user;
   } catch (error) {
-    console.error('Login error:', error);
+    logError('Login failed', error);
     return null;
   }
 }
@@ -168,7 +170,7 @@ export function getCurrentUser(): User | null {
       return null;
     }
   } catch (error) {
-    console.error('Error getting current user:', error);
+    logError('Failed to get current user', error);
   }
 
   return null;
@@ -200,7 +202,7 @@ export async function fetchCurrentUser(): Promise<User | null> {
     const data = await response.json();
     return data.user;
   } catch (error) {
-    console.error('Error fetching current user:', error);
+    logError('Failed to fetch current user', error);
     return null;
   }
 }
@@ -215,7 +217,7 @@ export function setCurrentUser(user: User): void {
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
     localStorage.setItem(USER_ID_STORAGE_KEY, user.id);
   } catch (error) {
-    console.error('Error setting current user:', error);
+    logError('Failed to set current user', error);
   }
 }
 
@@ -231,7 +233,7 @@ export async function clearCurrentUser(): Promise<void> {
     try {
       await trackUserActivity(currentUser.id, 'logout', {});
     } catch (error) {
-      console.error('Error tracking logout:', error);
+      logError('Failed to track logout', error);
     }
   }
 
@@ -274,10 +276,10 @@ export async function trackUserActivity(
     });
 
     if (!response.ok) {
-      console.error('Failed to track activity');
+      logError('Failed to track activity', undefined);
     }
   } catch (error) {
-    console.error('Error tracking user activity:', error);
+    logError('Failed to track user activity', error);
   }
 }
 
@@ -311,7 +313,7 @@ export async function getUserActivities(userId?: string): Promise<Array<{
     const data = await response.json();
     return data.activities || [];
   } catch (error) {
-    console.error('Error loading user activities:', error);
+    logError('Failed to load user activities', error);
     return [];
   }
 }
@@ -343,7 +345,7 @@ export async function getUserStats(userId: string): Promise<{
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Error getting user stats:', error);
+    logError('Failed to get user stats', error);
     return {
       totalLogins: 0,
       lastLoginAt: null,
@@ -372,7 +374,7 @@ export async function getAllUsers(): Promise<User[]> {
     const data = await response.json();
     return data.users || [];
   } catch (error) {
-    console.error('Error getting users:', error);
+    logError('Failed to get users', error);
     return [];
   }
 }

@@ -5,6 +5,7 @@
 
 import connectDB from '@/lib/mongodb';
 import mongoose, { Schema, Model } from 'mongoose';
+import { error as logError } from './logger';
 
 export interface ICostTracking {
   _id: string;
@@ -103,7 +104,7 @@ export async function trackAPICost(
       metadata,
     });
   } catch (error) {
-    console.error('Error tracking API cost:', error);
+    logError('Failed to track API cost', error);
     // Don't throw - cost tracking failures shouldn't break the app
   }
 }
@@ -187,7 +188,7 @@ export async function getCostStats(
       count: stats[0].count,
     };
   } catch (error) {
-    console.error('Error getting cost stats:', error);
+    logError('Failed to get cost stats', error);
     return {
       totalCost: 0,
       costByService: {},

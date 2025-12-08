@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
 import { validatePassword } from '@/lib/passwordValidation';
+import { error as logError } from '@/lib/logger';
 
 const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
 
@@ -112,7 +113,7 @@ export async function PUT(
     response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
     return response;
   } catch (error: any) {
-    console.error('Update user error:', error);
+    logError('Failed to update user', error);
     return NextResponse.json(
       { error: 'Failed to update user' },
       { status: 500 }

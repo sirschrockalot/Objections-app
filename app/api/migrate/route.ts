@@ -11,6 +11,7 @@ import LearningPathProgress from '@/lib/models/LearningPathProgress';
 import VoiceSession from '@/lib/models/VoiceSession';
 import { createApiHandler } from '@/lib/api/routeHandler';
 import { RATE_LIMITS } from '@/lib/rateLimiter';
+import { error as logError } from '@/lib/logger';
 
 export const POST = createApiHandler({
   rateLimit: RATE_LIMITS.api,
@@ -48,7 +49,7 @@ export const POST = createApiHandler({
           );
           results.customResponses = (results.customResponses || 0) + 1;
         } catch (error) {
-          console.error('Error migrating custom response:', error);
+          logError('Failed to migrate custom response', error);
         }
       }
     }
@@ -65,7 +66,7 @@ export const POST = createApiHandler({
           });
           results.confidenceRatings = (results.confidenceRatings || 0) + 1;
         } catch (error) {
-          console.error('Error migrating confidence rating:', error);
+          logError('Failed to migrate confidence rating', error);
         }
       }
     }
@@ -90,7 +91,7 @@ export const POST = createApiHandler({
           );
           results.practiceSessions = (results.practiceSessions || 0) + 1;
         } catch (error) {
-          console.error('Error migrating practice session:', error);
+          logError('Failed to migrate practice session', error);
         }
       }
     }
@@ -112,7 +113,7 @@ export const POST = createApiHandler({
           );
           results.notes = (results.notes || 0) + 1;
         } catch (error) {
-          console.error('Error migrating note:', error);
+          logError('Failed to migrate note', error);
         }
       }
     }
@@ -137,7 +138,7 @@ export const POST = createApiHandler({
           );
           results.templates = (results.templates || 0) + 1;
         } catch (error) {
-          console.error('Error migrating template:', error);
+          logError('Failed to migrate template', error);
         }
       }
     }
@@ -160,7 +161,7 @@ export const POST = createApiHandler({
           );
           results.practiceHistory = (results.practiceHistory || 0) + 1;
         } catch (error) {
-          console.error('Error migrating practice history:', error);
+          logError('Failed to migrate practice history', error);
         }
       }
     }
@@ -183,7 +184,7 @@ export const POST = createApiHandler({
           );
           results.points = (results.points || 0) + 1;
         } catch (error) {
-          console.error('Error migrating points:', error);
+          logError('Failed to migrate points', error);
         }
       }
     }
@@ -208,7 +209,7 @@ export const POST = createApiHandler({
           );
           results.reviewSchedules = (results.reviewSchedules || 0) + 1;
         } catch (error) {
-          console.error('Error migrating review schedule:', error);
+          logError('Failed to migrate review schedule', error);
         }
       }
     }
@@ -234,7 +235,7 @@ export const POST = createApiHandler({
           );
           results.learningPathProgress = (results.learningPathProgress || 0) + 1;
         } catch (error) {
-          console.error('Error migrating learning path progress:', error);
+          logError('Failed to migrate learning path progress', error);
         }
       }
     }
@@ -262,7 +263,7 @@ export const POST = createApiHandler({
           );
           results.voiceSessions = (results.voiceSessions || 0) + 1;
         } catch (error) {
-          console.error('Error migrating voice session:', error);
+          logError('Failed to migrate voice session', error);
         }
       }
     }

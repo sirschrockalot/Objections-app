@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { requireAdmin, createAuthErrorResponse } from '@/lib/authMiddleware';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rateLimiter';
 import { validatePassword } from '@/lib/passwordValidation';
+import { error as logError } from '@/lib/logger';
 
 const apiRateLimit = createRateLimitMiddleware(RATE_LIMITS.api);
 
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
     return response;
   } catch (error: any) {
-    console.error('Get users error:', error);
+    logError('Failed to get users', error);
     return NextResponse.json(
       { error: 'Failed to get users' },
       { status: 500 }

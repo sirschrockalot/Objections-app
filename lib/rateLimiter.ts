@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import NodeCache from 'node-cache';
 import connectDB from '@/lib/mongodb';
 import mongoose, { Schema, Model } from 'mongoose';
+import { error as logError } from './logger';
 
 interface RateLimitRecord {
   count: number;
@@ -99,7 +100,7 @@ export async function checkRateLimit(
       memoryCache.set(cacheKey, newRecord, Math.ceil(config.windowMs / 1000));
       
       // Also save to MongoDB (async)
-      saveRateLimitToDB(identifier, newRecord).catch(console.error);
+      saveRateLimitToDB(identifier, newRecord).catch((err) => logError('Failed to save rate limit to DB', err));
       
       return {
         allowed: true,
@@ -122,7 +123,7 @@ export async function checkRateLimit(
     memoryCache.set(cacheKey, memoryCached, Math.ceil((memoryCached.resetTime - now) / 1000));
     
     // Also save to MongoDB (async)
-    saveRateLimitToDB(identifier, memoryCached).catch(console.error);
+    saveRateLimitToDB(identifier, memoryCached).catch((err) => logError('Failed to save rate limit to DB', err));
     
     return {
       allowed: true,
@@ -180,7 +181,7 @@ export async function checkRateLimit(
       resetTime: updatedRecord.resetTime,
     };
   } catch (error) {
-    console.error('Error checking rate limit in MongoDB:', error);
+    logError('Failed to check rate limit in MongoDB', error);
     // Fallback to in-memory only
     const newRecord: RateLimitRecord = {
       count: 1,
@@ -213,7 +214,7 @@ async function saveRateLimitToDB(identifier: string, record: RateLimitRecord): P
       { upsert: true, new: true }
     );
   } catch (error) {
-    console.error('Error saving rate limit to MongoDB:', error);
+    logError('Failed to save rate limit to MongoDB', error);
   }
 }
 

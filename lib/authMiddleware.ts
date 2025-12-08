@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, getTokenFromRequest } from '@/lib/jwt';
 import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
+import { error as logError } from './logger';
 
 export interface AuthResult {
   authenticated: boolean;
@@ -67,7 +68,7 @@ export async function requireAuth(
         email: user.username,
       };
     } catch (error) {
-      console.error('Error checking user status:', error);
+      logError('Failed to check user status', error);
       // If database check fails, still allow based on token (for resilience)
       return {
         authenticated: true,
