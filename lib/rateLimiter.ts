@@ -37,7 +37,7 @@ const RateLimitSchema = new Schema<IRateLimit>(
     resetTime: {
       type: Date,
       required: true,
-      index: true,
+      // Index is defined below with TTL support
     },
     createdAt: {
       type: Date,

@@ -81,7 +81,6 @@ const PropertyAnalysisSchema = new Schema<IPropertyAnalysis, PropertyAnalysisMod
     propertyAddress: {
       type: String,
       required: true,
-      index: true,
     },
     propertyDetails: {
       type: Schema.Types.Mixed,
@@ -107,8 +106,8 @@ const PropertyAnalysisSchema = new Schema<IPropertyAnalysis, PropertyAnalysisMod
 
 // Indexes for faster lookups
 PropertyAnalysisSchema.index({ userId: 1, createdAt: -1 });
-PropertyAnalysisSchema.index({ propertyAddress: 1 });
 // Compound index for cache lookup query (userId + propertyAddress + createdAt)
+// Note: propertyAddress is included in the compound index below, no need for separate index
 PropertyAnalysisSchema.index({ userId: 1, propertyAddress: 1, createdAt: -1 });
 
 export default mongoose.models.PropertyAnalysis ||

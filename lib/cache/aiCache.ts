@@ -50,7 +50,7 @@ const AICacheSchema = new Schema<IAICache>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
+      // Index is defined below with TTL support
     },
   },
   {
