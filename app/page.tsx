@@ -285,7 +285,7 @@ export default function Home() {
           objectionsCount: sessionObjections.current.length,
         });
       } catch (error) {
-        console.error('Error adding points:', error);
+        logError('Failed to add points', error);
       }
       
       sessionStartTime.current = null;
