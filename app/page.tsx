@@ -326,7 +326,7 @@ export default function Home() {
         objectionId,
       });
     } catch (error) {
-      console.error('Error adding points:', error);
+      logError('Failed to add points', error);
     }
 
     // Update local state - only update if objection actually changed
