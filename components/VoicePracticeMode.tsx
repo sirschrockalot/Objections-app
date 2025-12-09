@@ -17,6 +17,7 @@ import { calculateAllGoalProgress, getActiveGoals } from '@/lib/voiceGoals';
 import { getActiveSession, hasRecoverableSession, clearActiveSession } from '@/lib/voiceSessionStorage';
 import { ConnectionQuality, createConnectionQualityMonitor } from '@/lib/connectionQuality';
 import { recordUsage, checkRateLimits, getDefaultRateLimitConfig, RateLimitConfig } from '@/lib/rateLimiting';
+import { debug, warn, error as logError } from '@/lib/logger';
 import Celebration from './Celebration';
 import SessionRecovery from './SessionRecovery';
 import MicrophonePermissionPrompt from './MicrophonePermissionPrompt';
@@ -71,13 +72,13 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     config: agentConfig,
     scenarioContext: selectedScenario ? formatScenarioContext(selectedScenario) : undefined,
     onSessionStart: (session) => {
-      console.log('Session started:', session);
+      debug('Session started', session);
       if (selectedScenario) {
-        console.log('Scenario context injected:', selectedScenario.name);
+        debug('Scenario context injected', { name: selectedScenario.name });
       }
     },
     onSessionEnd: (session) => {
-      console.log('Session ended:', session);
+      debug('Session ended', session);
       // Save scenario session if scenario is selected
       if (selectedScenario) {
         const scenarioSession: VoiceScenarioSession = {
@@ -148,7 +149,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
         }
       }
     } catch (error) {
-      console.error('Error checking goals:', error);
+      logError('Failed to check goals', error);
     }
   }, [selectedScenario, onSessionEnd]);
 
@@ -285,7 +286,7 @@ export default function VoicePracticeMode({ onSessionEnd }: VoicePracticeModePro
     setAudioSupport(support);
 
     if (!support.microphone || !support.audioContext || !support.mediaRecorder) {
-      console.warn('Audio features not fully supported in this browser');
+      warn('Audio features not fully supported in this browser');
     }
 
     // Check for recoverable session

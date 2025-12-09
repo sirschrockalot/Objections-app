@@ -15,6 +15,7 @@ import ReviewDueBadge from './ReviewDueBadge';
 import VideoRecommendations from './VideoRecommendations';
 import { useSwipe } from '@/hooks/useSwipe';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
+import { error as logError } from '@/lib/logger';
 
 interface ObjectionCardProps {
   objection: Objection;
@@ -157,7 +158,7 @@ const ObjectionCard = forwardRef<ObjectionCardRef, ObjectionCardProps>(
         });
       }
     } catch (error) {
-      console.error('Error adding points:', error);
+      logError('Failed to add points', error);
     }
     
     if (onRatingChange) {

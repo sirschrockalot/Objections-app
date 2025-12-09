@@ -43,6 +43,7 @@ import WelcomeScreen from '@/components/WelcomeScreen';
 import UserMenu from '@/components/UserMenu';
 import { getCurrentUserId, trackUserActivity } from '@/lib/auth';
 import AuthGuard from '@/components/AuthGuard';
+import { error as logError } from '@/lib/logger';
 
 type PracticeMode = 'random' | 'category' | 'weakness' | 'challenge' | 'review' | 'spaced' | 'scenario' | 'learning-path' | 'voice';
 
@@ -109,7 +110,7 @@ export default function Home() {
           }, 300);
         }
       } catch (error) {
-        console.error('Error loading initial data:', error);
+        logError('Failed to load initial data', error);
       }
     };
     
@@ -246,7 +247,7 @@ export default function Home() {
               achievementId: id,
             });
           } catch (error) {
-            console.error('Error adding points:', error);
+            logError('Failed to add points', error);
           }
           
           setCelebration({
@@ -828,7 +829,7 @@ export default function Home() {
                         messagesExchanged: session.metrics.messagesExchanged,
                       });
                     } catch (error) {
-                      console.error('Error adding points:', error);
+                      logError('Failed to add points', error);
                     }
                     
                     // Show celebration if significant session

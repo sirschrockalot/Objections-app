@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 import { 
   getConfidenceTrendData, 
   getHeatMapData, 
@@ -57,7 +58,7 @@ export default function AnalyticsDashboard({ onSelectObjection }: AnalyticsDashb
         setMonthlyReports(monthly);
         setImprovementData(improvement);
       } catch (error) {
-        console.error('Error loading analytics data:', error);
+        logError('Failed to load analytics data', error);
       } finally {
         setIsLoading(false);
       }

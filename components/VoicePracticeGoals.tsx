@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 import { VoicePracticeGoal, GoalProgress } from '@/types';
 import {
   getVoiceGoals,
@@ -65,7 +66,7 @@ export default function VoicePracticeGoals() {
       );
       setProgress(progressMap);
     } catch (error) {
-      console.error('Error loading goal progress:', error);
+      logError('Failed to load goal progress', error);
     }
   };
 

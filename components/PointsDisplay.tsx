@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { getAllStats } from '@/lib/storage';
 import { UserLevel } from '@/types';
 import { Trophy, Star, TrendingUp } from 'lucide-react';
@@ -42,7 +43,7 @@ export default function PointsDisplay() {
           return allStats.recentPoints;
         });
       } catch (error) {
-        console.error('Error updating points:', error);
+        logError('Failed to update points', error);
       }
     };
 

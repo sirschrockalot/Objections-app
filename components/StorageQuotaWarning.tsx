@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,7 +48,7 @@ export default function StorageQuotaWarning({
       setUsage(storageUsage);
       setLargestItems(largeItems);
     } catch (error) {
-      console.error('Error checking storage:', error);
+      logError('Failed to check storage', error);
     }
   };
 

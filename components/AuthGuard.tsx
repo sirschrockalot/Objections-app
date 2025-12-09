@@ -9,6 +9,7 @@ import SessionTimeoutWarning from './SessionTimeoutWarning';
 import { initializeActivityTracking, stopActivityTracking, resetSession } from '@/lib/sessionTimeout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+import { error as logError } from '@/lib/logger';
 
 type AuthMode = 'login' | 'register';
 
@@ -44,7 +45,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             setMustChangePassword(false);
           }
         } catch (error) {
-          console.error('Error checking password change requirement:', error);
+          logError('Failed to check password change requirement', error);
           setMustChangePassword(false);
         }
       } else {
@@ -99,7 +100,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         setMustChangePassword(false);
       }
     } catch (error) {
-      console.error('Error refreshing user after password change:', error);
+      logError('Failed to refresh user after password change', error);
     }
   };
 

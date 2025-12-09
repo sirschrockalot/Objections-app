@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ export default function ErrorRecoveryDialog({
         setRecoveryAttempted(true);
       }
     } catch (recoveryError) {
-      console.error('Recovery failed:', recoveryError);
+      logError('Recovery failed', recoveryError);
       setRecoveryAttempted(true);
     } finally {
       setIsRecovering(false);

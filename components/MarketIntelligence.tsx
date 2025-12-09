@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Search, Home, TrendingUp, DollarSign, Calculator, Brain, AlertTriangle, CheckCircle, XCircle, TrendingDown, Minus } from 'lucide-react';
@@ -116,7 +117,7 @@ export default function MarketIntelligence() {
       setAnalysis(data.analysis);
     } catch (err: any) {
       setError(err.message || 'Failed to analyze property. Please try again.');
-      console.error('Analysis error:', err);
+      logError('Analysis failed', err);
     } finally {
       setLoading(false);
     }

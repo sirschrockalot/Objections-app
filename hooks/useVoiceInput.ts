@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 
 interface UseVoiceInputOptions {
   onResult?: (text: string) => void;
@@ -61,7 +62,7 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
         setIsListening(true);
         setTranscript('');
       } catch (error) {
-        console.error('Error starting voice recognition:', error);
+        logError('Failed to start voice recognition', error);
       }
     }
   };

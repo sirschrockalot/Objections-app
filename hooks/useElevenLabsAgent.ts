@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { error as logError } from '@/lib/logger';
 import { ElevenLabsClient, createElevenLabsClient } from '@/lib/elevenlabs';
 import { AudioCapture, AudioPlayback } from '@/lib/audioUtils';
 import {
@@ -75,7 +76,7 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
             await audioPlaybackRef.current.playAudio(audioBlob);
           }
         } catch (error) {
-          console.error('Error playing audio:', error);
+          logError('Failed to play audio', error);
         } finally {
           setState((prev) => ({ ...prev, isSpeaking: false }));
         }
@@ -282,7 +283,7 @@ export function useElevenLabsAgent(options: UseElevenLabsAgentOptions) {
           format: audioRecording.type,
         };
         saveAudioRecording(recording).catch((error) => {
-          console.error('Failed to save audio recording:', error);
+          logError('Failed to save audio recording', error);
         });
       });
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { getAllStats } from '@/lib/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Calendar, TrendingUp, Target } from 'lucide-react';
@@ -35,7 +36,7 @@ export default function SpacedRepetitionStats() {
           return reviewStats;
         });
       } catch (error) {
-        console.error('Error loading review stats:', error);
+        logError('Failed to load review stats', error);
       }
     };
 

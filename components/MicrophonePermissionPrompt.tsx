@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
@@ -27,7 +28,7 @@ export default function MicrophonePermissionPrompt({
       setPermissionStatus('granted');
     } catch (err) {
       setPermissionStatus('denied');
-      console.error('Permission request failed:', err);
+      logError('Permission request failed', err);
     } finally {
       setIsRequesting(false);
     }

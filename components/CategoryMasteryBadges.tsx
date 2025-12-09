@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { getAllStats } from '@/lib/storage';
 import { CategoryMastery } from '@/types';
 import { Award, Trophy, Star, Target } from 'lucide-react';
@@ -54,7 +55,7 @@ export default function CategoryMasteryBadges() {
           return changed ? newMastery : prev;
         });
       } catch (error) {
-        console.error('Error loading mastery:', error);
+        logError('Failed to load mastery', error);
       }
     };
     

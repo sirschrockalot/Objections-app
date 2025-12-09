@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { VoiceSession, ConversationMessage } from '@/types';
 import { getAudioRecording } from '@/lib/audioStorage';
+import { error as logError } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import {
@@ -67,7 +68,7 @@ const SessionAudioPlayer = forwardRef<SessionAudioPlayerRef, SessionAudioPlayerP
           setHasRecording(false);
         }
       } catch (error) {
-        console.error('Error loading audio recording:', error);
+        logError('Failed to load audio recording', error);
         setHasRecording(false);
       } finally {
         setIsLoading(false);

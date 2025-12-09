@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { error as logError } from '@/lib/logger';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
@@ -72,7 +73,7 @@ export default function StatsDashboard({ onSelectObjection }: StatsDashboardProp
           };
         });
       } catch (error) {
-        console.error('Error loading stats:', error);
+        logError('Failed to load stats', error);
       }
     };
 

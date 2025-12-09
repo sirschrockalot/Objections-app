@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Comment } from '@/types';
 import { getComments, addComment, updateComment, deleteComment } from '@/lib/comments';
+import { error as logError } from '@/lib/logger';
 import { MessageSquare, Reply, Edit2, Trash2, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -45,7 +46,7 @@ export default function CommentsSection({ responseId, objectionId, onCommentAdde
         return prev; // No changes, return previous state
       });
     } catch (error) {
-      console.error('Error loading comments:', error);
+      logError('Failed to load comments', error);
     }
   }, [responseId, objectionId]);
 
@@ -63,7 +64,7 @@ export default function CommentsSection({ responseId, objectionId, onCommentAdde
       loadComments();
       onCommentAdded?.();
     } catch (error) {
-      console.error('Error adding comment:', error);
+      logError('Failed to add comment', error);
       alert('Failed to add comment');
     }
   };
@@ -78,7 +79,7 @@ export default function CommentsSection({ responseId, objectionId, onCommentAdde
       loadComments();
       onCommentAdded?.();
     } catch (error) {
-      console.error('Error adding reply:', error);
+      logError('Failed to add reply', error);
       alert('Failed to add reply');
     }
   };
@@ -92,7 +93,7 @@ export default function CommentsSection({ responseId, objectionId, onCommentAdde
       setEditingId(null);
       loadComments();
     } catch (error) {
-      console.error('Error updating comment:', error);
+      logError('Failed to update comment', error);
       alert('Failed to update comment');
     }
   };
@@ -105,7 +106,7 @@ export default function CommentsSection({ responseId, objectionId, onCommentAdde
       loadComments();
       onCommentAdded?.();
     } catch (error) {
-      console.error('Error deleting comment:', error);
+      logError('Failed to delete comment', error);
       alert('Failed to delete comment');
     }
   };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { error as logError } from '@/lib/logger';
 import { getAllUsers, getUserActivities, getUserStats, getCurrentUser, isAuthenticated, clearCurrentUser, createUser, updateUser, deleteUser } from '@/lib/auth';
 import { getAuthHeaders } from '@/lib/apiClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -65,7 +66,7 @@ export default function AdminPage() {
       const data = await response.json();
       setAnalytics(data);
     } catch (err: any) {
-      console.error('Analytics load error:', err);
+      logError('Failed to load analytics', err);
       setError(err.message || 'Failed to load analytics');
     } finally {
       setAnalyticsLoading(false);
