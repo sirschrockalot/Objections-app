@@ -88,7 +88,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         setMustChangePassword(true);
       }
     } catch (error) {
-      console.error('Error checking password change requirement:', error);
+      logError('Failed to check password change requirement', error);
     }
   };
 

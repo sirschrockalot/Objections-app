@@ -223,7 +223,7 @@ export async function getDueForReview(): Promise<string[]> {
       .filter(schedule => schedule.nextReviewDate <= today)
       .map(schedule => schedule.objectionId);
   } catch (error) {
-    console.error('Error getting due reviews:', error);
+    logError('Failed to get due reviews', error);
     return [];
   }
 }

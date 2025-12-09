@@ -193,7 +193,7 @@ export async function clearAllAudioRecordings(): Promise<void> {
       request.onerror = () => reject(new Error('Failed to clear audio recordings'));
     });
   } catch (error) {
-    console.error('Error clearing audio recordings:', error);
+    logError('Failed to clear audio recordings', error);
     throw error;
   }
 }

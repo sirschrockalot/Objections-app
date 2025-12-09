@@ -108,7 +108,7 @@ export async function recoverFromStorageError(
         return false;
     }
   } catch (recoveryError) {
-    console.error('Recovery attempt failed:', recoveryError);
+    logError('Recovery attempt failed', recoveryError);
     return false;
   }
 }
@@ -240,7 +240,7 @@ export async function safeStorageOperation<T>(
       try {
         fallback();
       } catch (fallbackError) {
-        console.error('Fallback failed:', fallbackError);
+        logError('Fallback failed', fallbackError);
       }
     }
 

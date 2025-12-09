@@ -30,7 +30,7 @@ export async function getPathProgress(pathId: string): Promise<LearningPathProgr
       }
       return null;
     } catch (error) {
-      console.error('Error getting path progress from API:', error);
+      logError('Failed to get path progress from API', error);
       // Fall through
     }
   }
@@ -71,7 +71,7 @@ export async function savePathProgress(progress: LearningPathProgress): Promise<
       });
       return;
     } catch (error) {
-      console.error('Error saving path progress to API:', error);
+      logError('Failed to save path progress to API', error);
       // Fall through
     }
   }
@@ -228,7 +228,7 @@ export function getDailyChallenge(): DailyChallenge | null {
 
     return challenge;
   } catch (error) {
-    console.error('Error getting daily challenge:', error);
+    logError('Failed to get daily challenge', error);
     return null;
   }
 }
@@ -293,7 +293,7 @@ export async function getCompletedPaths(): Promise<string[]> {
         })
         .map((progress: any) => progress.pathId);
     } catch (error) {
-      console.error('Error getting completed paths from API:', error);
+      logError('Failed to get completed paths from API', error);
       // Fall through
     }
   }

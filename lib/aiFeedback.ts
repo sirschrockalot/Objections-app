@@ -191,7 +191,7 @@ Return JSON:
           inputTokens: usage.prompt_tokens,
           outputTokens: usage.completion_tokens,
           task: 'feedback',
-        }).catch(console.error);
+        }).catch((err) => logError('Failed to track API cost', err));
       }
 
       // Parse JSON response
