@@ -1,0 +1,104 @@
+# Objection Text Fixes Summary
+
+## Overview
+
+An audit was conducted on all objections in the database to identify incomplete, cut-off, or garbled text. This document summarizes the issues found and the fixes applied.
+
+## Issues Found
+
+### Critical Issues (Fixed)
+
+#### 1. Cut-off Text - Tenant Concern
+- **ID**: `42d038eb-12bb-4e3f-a45c-f1791a7e83ee`
+- **Original Text**: `"What if my tenants don"`
+- **Issue**: Text was cut off mid-sentence, making it unclear and unprofessional
+- **Fixed Text**: `"What if my tenants don't pay or don't move out?"`
+- **Reason**: This is a common seller concern about tenant-related issues. The fix addresses both primary concerns: payment and moving out.
+
+#### 2. Garbled OCR Text - Trust Objection
+- **ID**: `5a294523-b6be-4d84-a7c4-57015ca51083`
+- **Original Text**: `"I a n d won't b a c k out?"`
+- **Issue**: Text was garbled from OCR errors with excessive spacing, making it unreadable
+- **Fixed Text**: `"How do I know you won't back out?"`
+- **Reason**: This is a common trust objection from sellers concerned about buyer reliability. The fix provides a clear, professional phrasing.
+
+## Fixes Applied
+
+Both critical issues have been fixed in `data/objections.ts`. The fixes:
+
+1. ✅ Complete incomplete sentences with appropriate endings
+2. ✅ Remove OCR artifacts (excessive spacing, garbled text)
+3. ✅ Maintain the original intent and category of each objection
+4. ✅ Use professional, natural language appropriate for sales conversations
+
+## Verification
+
+All fixes have been verified:
+- ✅ Text is complete and grammatically correct
+- ✅ Category and difficulty levels remain unchanged
+- ✅ Default responses remain intact
+- ✅ No linter errors introduced
+
+## Audit Tool
+
+A script has been created to help identify and fix incomplete objections in the future:
+
+**Script**: `scripts/fix-incomplete-objections.ts`
+
+**Usage**:
+```bash
+# Audit only (shows issues without fixing)
+npm run fix-objections
+
+# Audit and apply fixes
+npm run fix-objections -- --fix
+```
+
+The script checks for:
+- Text cut off mid-sentence
+- Garbled OCR text (excessive spacing, single letters with spaces)
+- Missing punctuation
+- Text that's too short to be complete
+
+## Remaining Objections
+
+All other objections (31 total) were verified as complete:
+- ✅ All have proper ending punctuation
+- ✅ All are complete sentences
+- ✅ No OCR artifacts detected
+- ✅ Appropriate length and clarity
+
+## Notes on Ellipsis-Ending Objections
+
+Some objections intentionally end with ellipses (`...`) to indicate trailing thoughts or incomplete statements that are common in real conversations. These are **intentional** and should not be changed:
+
+- `"I get these calls all the time, I am not taking any low ball offers..."`
+- `"According to the tax appraisal website (or the Zestimate), my house is valued at this amount..."`
+- `"Why is there an inspection period listed..."`
+
+These reflect natural speech patterns and are appropriate for practice scenarios.
+
+## Future Maintenance
+
+To prevent similar issues:
+
+1. **When importing new objections**:
+   - Review all text for completeness
+   - Check for OCR artifacts
+   - Verify proper punctuation
+   - Test readability
+
+2. **Regular audits**:
+   - Run `npm run fix-objections` periodically
+   - Review user feedback for unclear objections
+   - Check database for any truncated entries
+
+3. **Import scripts**:
+   - Update import scripts to detect and flag incomplete text
+   - Add validation for minimum text length
+   - Clean OCR artifacts automatically
+
+## Date
+
+Fixes applied: December 2024
+

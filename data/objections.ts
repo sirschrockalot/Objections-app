@@ -367,7 +367,7 @@ export const initialObjections: Objection[] = [
   },
   {
     "id": "5a294523-b6be-4d84-a7c4-57015ca51083",
-    "text": "I a n d won't b a c k out?",
+    "text": "How do I know you won't back out?",
     "category": "General",
     "difficulty": "beginner",
     "defaultResponses": [
@@ -395,7 +395,7 @@ export const initialObjections: Objection[] = [
   },
   {
     "id": "42d038eb-12bb-4e3f-a45c-f1791a7e83ee",
-    "text": "What if my tenants don",
+    "text": "What if my tenants don't pay or don't move out?",
     "category": "General",
     "difficulty": "beginner",
     "defaultResponses": [

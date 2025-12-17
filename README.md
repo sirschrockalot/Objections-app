@@ -63,7 +63,7 @@ npm run deps:fix            # Fix security vulnerabilities
 npm run deps:check-manual   # Detailed dependency report
 ```
 
-For more information, see [docs/dependencies/DEPENDENCY_MANAGEMENT.md](./docs/dependencies/DEPENDENCY_MANAGEMENT.md).
+For more information, see [docs/dependencies/DEPENDENCY_MANAGEMENT.mdx](./docs/dependencies/DEPENDENCY_MANAGEMENT.mdx).
 
 ## How to Use
 
@@ -141,7 +141,7 @@ Comprehensive documentation is available in the [`docs/`](./docs/) directory, or
 - **[Deployment](./docs/deployment/)** - Deployment guides (Heroku, MongoDB setup)
 - **[Recommendations](./docs/recommendations/)** - Feature recommendations and quality reports
 
-See [docs/README.md](./docs/README.md) for a complete index of all documentation.
+See [docs/README.mdx](./docs/README.mdx) for a complete index of all documentation.
 
 ## License
 

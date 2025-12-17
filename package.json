@@ -18,7 +18,8 @@
     "deps:audit": "npm audit",
     "deps:fix": "npm audit fix",
     "deps:update": "npx npm-check-updates",
-    "deps:check-manual": "tsx scripts/check-dependencies.ts"
+    "deps:check-manual": "tsx scripts/check-dependencies.ts",
+    "fix-objections": "tsx scripts/fix-incomplete-objections.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
